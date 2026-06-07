@@ -1,0 +1,25 @@
+name: expense-member
+version: 1.0.0
+description: "Hermes profile template for shared household expense tracking (MCP-only, shared SQLite DB). Locale-specific SOUL/skills come from locales/<locale>/."
+hermes_requires: ">=0.14.0"
+author: "Hermes Expense Tracker"
+license: "MIT"
+
+env_requires:
+  - name: EXPENSE_MCP_PYTHON
+    description: "MCP venv Python path (created by bootstrap.sh)"
+    required: true
+  - name: EXPENSE_MCP_SERVER_PATH
+    description: "Path to MCP server.py"
+    required: true
+  - name: EXPENSE_DB_PATH
+    description: "Shared SQLite DB for all household profiles"
+    required: true
+    default: "~/expenses/data/expenses.db"
+  - name: EXPENSE_LOCALE
+    description: "Household locale for reports and agent copy (en or es)"
+    required: true
+    default: "en"
+  - name: EXPENSE_MEMBER_SLUG
+    description: "Caller slug for project visibility and MCP scoping"
+    required: true

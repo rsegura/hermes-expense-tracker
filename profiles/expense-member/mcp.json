@@ -1,0 +1,11 @@
+{
+  "servers": {
+    "expense-tracker": {
+      "command": "${EXPENSE_MCP_PYTHON}",
+      "args": ["${EXPENSE_MCP_SERVER_PATH}"],
+      "env": {
+        "EXPENSE_DB_PATH": "${EXPENSE_DB_PATH}"
+      }
+    }
+  }
+}

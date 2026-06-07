@@ -1,0 +1,18 @@
+# Secrets and generated paths
+.env
+.env.paths
+
+# MCP runtime
+mcp/expense-tracker/.venv/
+mcp/expense-tracker/**/__pycache__/
+mcp/expense-tracker/**/*.pyc
+.pytest_cache/
+
+# Local databases (shared DB lives outside the repo by default)
+*.db
+*.db-journal
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

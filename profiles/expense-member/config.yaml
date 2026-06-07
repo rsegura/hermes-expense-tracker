@@ -1,0 +1,47 @@
+model:
+  provider: auto
+  default: qwen3.6
+
+platform_toolsets:
+  cli: [mcp-expense-tracker]
+  telegram: [mcp-expense-tracker]
+
+skills:
+  always_load: [expense-tracker, onboarding]
+
+memory:
+  memory_enabled: false
+  user_profile_enabled: false
+
+mcp_servers:
+  expense-tracker:
+    command: "${EXPENSE_MCP_PYTHON}"
+    args: ["${EXPENSE_MCP_SERVER_PATH}"]
+    env:
+      EXPENSE_DB_PATH: "${EXPENSE_DB_PATH}"
+      EXPENSE_MEMBER_SLUG: "${EXPENSE_MEMBER_SLUG}"
+      EXPENSE_LOCALE: "${EXPENSE_LOCALE}"
+    enabled: true
+    timeout: 60
+
+agent:
+  max_turns: 30
+
+session_reset:
+  mode: both
+  idle_minutes: 1440
+  at_hour: 4
+
+# UX Telegram: tools silenciosos, reacciones 👀/👍, respuestas cortas (SOUL)
+display:
+  tool_progress: off
+  interim_assistant_messages: false
+  turn_completion_explainer: false
+  language: "${EXPENSE_LOCALE}"
+  platforms:
+    telegram:
+      tool_progress: off
+      streaming: true
+
+telegram:
+  reactions: true

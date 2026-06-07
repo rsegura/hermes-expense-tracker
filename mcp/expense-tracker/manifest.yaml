@@ -1,0 +1,31 @@
+manifest_version: 1
+
+name: expense-tracker
+description: Shared expense tracking MCP for Hermes couple profiles (SQLite, no balances).
+source: local
+
+transport:
+  type: stdio
+  command: "${INSTALL_DIR}/.venv/bin/python"
+  args:
+    - "${INSTALL_DIR}/server.py"
+  env:
+    EXPENSE_DB_PATH: "${EXPENSE_DB_PATH}"
+
+install:
+  type: local
+  path: .
+  bootstrap:
+    - "python3 -m venv .venv"
+    - ".venv/bin/pip install -r requirements.txt"
+
+auth:
+  type: none
+
+tools:
+  default_enabled: all
+
+post_install: |
+  Run bootstrap.sh from the hermes-expense-tracker repo root to create ~/expenses/data/expenses.db.
+  Set EXPENSE_* paths in each profile (install.sh / add-member.sh); config.yaml references them via ${EXPENSE_DB_PATH}, etc.
+  Start a new Hermes session to load expense-tracker tools.
