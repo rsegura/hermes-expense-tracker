@@ -20,6 +20,10 @@ env_requires:
     description: "Household locale for reports and agent copy (en or es)"
     required: true
     default: "en"
+  - name: EXPENSE_DEFAULT_CURRENCY
+    description: "Default ISO 4217 currency for new expenses (e.g. USD, EUR, ARS)"
+    required: true
+    default: "USD"
   - name: EXPENSE_MEMBER_SLUG
     description: "Caller slug for project visibility and MCP scoping"
     required: true

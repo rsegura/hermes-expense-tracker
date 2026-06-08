@@ -7,7 +7,8 @@ import sys
 from pathlib import Path
 
 from .bootstrap import run_bootstrap
-from .locale_util import save_household_locale
+from .currency_util import resolve_expense_currency, save_household_currency
+from .locale_util import resolve_expense_locale, save_household_locale
 from .paths_util import resolve_expense_db_path
 from .runtime import MCP_DIR, hermes_profiles_dir, mcp_env, run_hermes, venv_python
 from .add_member import run_add_member
@@ -75,6 +76,14 @@ def run_update() -> int:
         return 1
 
     db_path = resolve_expense_db_path()
+    locale_for_currency = resolve_expense_locale(required=False) or "en"
+    sys.path.insert(0, str(MCP_DIR))
+    from expense_tracker.paths import currency_file
+
+    if not currency_file().exists():
+        save_household_currency("ARS" if locale_for_currency == "es" else "USD")
+    currency = resolve_expense_currency() or "USD"
+
     print()
     print("==> DB migrations (project members)")
     import subprocess
@@ -121,6 +130,7 @@ def run_update() -> int:
             return upd.returncode
 
         os.environ["EXPENSE_LOCALE"] = locale
+        os.environ["EXPENSE_DEFAULT_CURRENCY"] = currency
         os.environ["INSTALL_QUIET"] = "1"
         os.environ["SKIP_PREREQ"] = "1"
         code = run_add_member(slug, display_name, quiet=True, skip_prereq=True)

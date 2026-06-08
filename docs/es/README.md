@@ -1,22 +1,23 @@
+<div align="center">
+
 # Hermes Expense Tracker
+
+**Gastos del hogar compartidos, por chat.**
+
+[English](../../README.md)
+
+</div>
 
 Expense tracker para tu hogar sobre [Hermes Agent](https://hermes-agent.nousresearch.com): cada miembro de la familia tiene su propio asistente conversacional (Telegram, CLI, etc.), todos comparten **una sola base de datos** de gastos, y toda la lógica vive en un MCP Python.
 
-Repositorio: [github.com/Canopix/hermes-expense-tracker](https://github.com/Canopix/hermes-expense-tracker)
-
 - Los perfiles **solo conversan**; no calculan ni persisten gastos por su cuenta.
-- **No hay deudas** ni balances entre personas (`paid_by` ≠ `attributed`, sin settlements).
 - Ideal para pareja, familia, roommates o cualquier grupo que comparta gastos del hogar.
-
-Documentación en inglés: [README.md](../../README.md) · [docs/en/](../en/)
 
 ---
 
 ## Antes de empezar
 
 Este repo es un **perfil Hermes + MCP** — no es una app standalone. Instalá [Hermes Agent](https://hermes-agent.nousresearch.com) primero (`hermes --version` >= 0.14.0).
-
-El instalador (`./install.sh`) usa **[Rich](https://github.com/Textualize/rich)** (paneles y spinners) — la misma familia que Hermes (Rich + `prompt_toolkit` + Typer). No hace falta Node.js.
 
 **Plataformas:** macOS, Linux, WSL2 y **Windows nativo** (PowerShell 5.1+). Misma lógica Python; elegí el launcher:
 

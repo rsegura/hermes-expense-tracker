@@ -211,12 +211,12 @@ def add_expense(
     amount: float,
     category: str,
     paid_by: str,
-    currency: str = "ARS",
+    currency: str | None = None,
     project: str | None = None,
     notes: str | None = None,
     allocations: list[dict[str, Any]] | None = None,
 ) -> str:
-    """Add an expense. Allocations must sum to 100; defaults to 100% for payer."""
+    """Add an expense. Allocations must sum to 100; defaults to 100% for payer. Currency defaults to household setting."""
     try:
         return _ok(
             repo.add_expense(
@@ -634,7 +634,11 @@ def generate_report(
     currency: str | None = None,
     include_ascii_charts: bool = True,
 ) -> str:
-    """Unified spending report (markdown) for month, year, or a single project."""
+    """Unified spending report (markdown) for month, year, or a single project.
+
+    When currency is omitted and expenses use multiple currencies, totals and
+    breakdowns are shown per currency in one report (amounts are never mixed).
+    """
     try:
         return _ok(
             reports.generate_report(
@@ -673,11 +677,11 @@ def render_chart(
 def set_category_budget(
     category: str,
     monthly_amount: float,
-    currency: str = "ARS",
+    currency: str | None = None,
     alert_threshold_pct: float = 100.0,
     notes: str | None = None,
 ) -> str:
-    """Set a monthly spending budget for a category."""
+    """Set a monthly spending budget for a category. Currency defaults to household setting."""
     try:
         return _ok(
             repo.set_category_budget(

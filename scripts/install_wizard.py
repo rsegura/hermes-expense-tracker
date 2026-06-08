@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MCP_DIR = ROOT / "mcp" / "expense-tracker"
 sys.path.insert(0, str(MCP_DIR))
 sys.path.insert(0, str(ROOT / "scripts"))
+from expense_tracker.currency import normalize_currency  # noqa: E402
 from expense_tracker.paths import (  # noqa: E402
     db_path_override_file,
     default_db_path,
@@ -26,6 +27,7 @@ from expense_tracker.paths import (  # noqa: E402
     is_legacy_db_path,
     locale_file,
 )
+from expense_cli.currency_util import save_household_currency  # noqa: E402
 from expense_cli.add_member import run_add_member  # noqa: E402
 from expense_cli.bootstrap import run_bootstrap  # noqa: E402
 from expense_cli.paths_util import write_env_paths  # noqa: E402
@@ -36,6 +38,17 @@ from wizard_banner import print_install_banner  # noqa: E402
 DEFAULT_DB_PATH = default_db_path()
 LOCALE_FILE = locale_file()
 DB_PATH_FILE = db_path_override_file()
+
+PRESET_CURRENCIES: list[tuple[str, str]] = [
+    ("USD", "US Dollar"),
+    ("EUR", "Euro"),
+    ("GBP", "British Pound"),
+    ("ARS", "Argentine Peso"),
+    ("MXN", "Mexican Peso"),
+    ("BRL", "Brazilian Real"),
+    ("CLP", "Chilean Peso"),
+    ("COP", "Colombian Peso"),
+]
 HERMES_MIN = "0.14.0"
 
 console = Console()
@@ -67,6 +80,10 @@ def validate_slug(slug: str, locale: str) -> str | None:
 def save_household_locale(locale: str) -> None:
     expense_tracker_dir().mkdir(parents=True, exist_ok=True)
     LOCALE_FILE.write_text(f"{locale}\n", encoding="utf-8")
+
+
+def save_household_currency_code(code: str) -> None:
+    save_household_currency(code)
 
 
 def display_path(path: Path) -> str:
@@ -133,12 +150,13 @@ def ask_db_path(locale: str) -> Path:
     return path
 
 
-def run_env(db_path: Path, locale: str) -> dict[str, str]:
+def run_env(db_path: Path, locale: str, currency: str) -> dict[str, str]:
     merged = os.environ.copy()
     merged.update(
         {
             "EXPENSE_DB_PATH": str(db_path),
             "EXPENSE_LOCALE": locale,
+            "EXPENSE_DEFAULT_CURRENCY": currency,
         }
     )
     return merged
@@ -162,6 +180,29 @@ def ask_locale() -> str:
         if choice == 2:
             return "es"
         fail("1 or 2 / 1 o 2")
+
+
+def ask_currency(locale: str) -> str:
+    lines = [msg(locale, "currency_intro"), ""]
+    for idx, (code, label) in enumerate(PRESET_CURRENCIES, start=1):
+        lines.append(f"  [cyan]{idx}[/cyan]  {code} — {label}")
+    lines.append(f"  [cyan]{len(PRESET_CURRENCIES) + 1}[/cyan]  Other / Otra (ISO code)")
+    console.print(Panel("\n".join(lines), title=msg(locale, "currency_title"), border_style="blue"))
+
+    custom_slot = len(PRESET_CURRENCIES) + 1
+    while True:
+        choice = IntPrompt.ask(f"  {msg(locale, 'currency_prompt')}", default=1)
+        if 1 <= choice <= len(PRESET_CURRENCIES):
+            return PRESET_CURRENCIES[choice - 1][0]
+        if choice == custom_slot:
+            raw = Prompt.ask(f"  {msg(locale, 'currency_custom')}").strip()
+            try:
+                code = normalize_currency(raw)
+            except ValueError:
+                fail(msg(locale, "currency_invalid"))
+                continue
+            return code
+        fail(f"1–{custom_slot}")
 
 
 def run(cmd: list[str], *, quiet: bool = True, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -237,11 +278,11 @@ def check_prerequisites(locale: str) -> bool:
     return not failed
 
 
-def bootstrap(db_path: Path, locale: str, *, venv_only: bool = False) -> bool:
+def bootstrap(db_path: Path, locale: str, currency: str, *, venv_only: bool = False) -> bool:
     running = msg(locale, "bootstrap_running_venv" if venv_only else "bootstrap_running")
     console.print(Panel(running, title=msg(locale, "bootstrap_title"), border_style="cyan"))
     with console.status(running, spinner="dots"):
-        for key, value in run_env(db_path, locale).items():
+        for key, value in run_env(db_path, locale, currency).items():
             os.environ[key] = value
         code = run_bootstrap(
             quiet=True,
@@ -257,9 +298,9 @@ def bootstrap(db_path: Path, locale: str, *, venv_only: bool = False) -> bool:
     return True
 
 
-def add_member(db_path: Path, slug: str, display_name: str, locale: str) -> bool:
+def add_member(db_path: Path, slug: str, display_name: str, locale: str, currency: str) -> bool:
     with console.status(f"[cyan]•[/cyan] expense-{slug}", spinner="dots"):
-        for key, value in run_env(db_path, locale).items():
+        for key, value in run_env(db_path, locale, currency).items():
             os.environ[key] = value
         os.environ["INSTALL_QUIET"] = "1"
         os.environ["SKIP_PREREQ"] = "1"
@@ -387,6 +428,10 @@ def main() -> int:
     print_install_banner(console)
     locale = ask_locale()
     save_household_locale(locale)
+    console.print()
+    currency = ask_currency(locale)
+    save_household_currency_code(currency)
+    ok(f"{msg(locale, 'currency_saved')}: {currency}")
 
     console.print(
         Panel(
@@ -411,11 +456,11 @@ def main() -> int:
                 border_style="cyan",
             )
         )
-        if not bootstrap(db_path, locale):
+        if not bootstrap(db_path, locale, currency):
             return 1
     elif not get_venv_python().exists():
         console.print(Panel(msg(locale, "bootstrap_venv_only"), title=msg(locale, "bootstrap_title"), border_style="cyan"))
-        if not bootstrap(db_path, locale, venv_only=True):
+        if not bootstrap(db_path, locale, currency, venv_only=True):
             return 1
     else:
         sync_env_paths(db_path)
@@ -457,7 +502,7 @@ def main() -> int:
                 fail(err)
                 continue
             break
-        if not add_member(db_path, slug, display_name, locale):
+        if not add_member(db_path, slug, display_name, locale, currency):
             return 1
         slugs.append(slug)
 

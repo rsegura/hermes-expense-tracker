@@ -7,6 +7,7 @@ import shutil
 import sys
 from pathlib import Path
 
+from .currency_util import resolve_expense_currency
 from .locale_util import resolve_expense_locale
 from .paths_util import resolve_expense_db_path, write_env_paths
 from .prereqs import require_prerequisites
@@ -50,6 +51,10 @@ def run_add_member(raw_slug: str, display_name: str, *, quiet: bool = False, ski
 
     locale = resolve_expense_locale()
     if not locale:
+        return 1
+
+    currency = resolve_expense_currency()
+    if not currency:
         return 1
 
     locale_dir = REPO_ROOT / "locales" / locale
@@ -128,7 +133,11 @@ except repo.ValidationError as exc:
 
     log(f"==> Personalizing SOUL for {display_name} (slug: {slug}, locale: {locale})", quiet=quiet)
     soul = (locale_dir / "SOUL.md").read_text(encoding="utf-8")
-    soul = soul.replace("{{MEMBER_NAME}}", display_name).replace("{{MEMBER_SLUG}}", slug)
+    soul = (
+        soul.replace("{{MEMBER_NAME}}", display_name)
+        .replace("{{MEMBER_SLUG}}", slug)
+        .replace("{{DEFAULT_CURRENCY}}", currency)
+    )
     (profile_dir / "SOUL.md").write_text(soul, encoding="utf-8")
 
     skills_src = locale_dir / "skills"
@@ -136,6 +145,11 @@ except repo.ValidationError as exc:
         skills_dst = profile_dir / "skills"
         skills_dst.mkdir(parents=True, exist_ok=True)
         shutil.copytree(skills_src, skills_dst, dirs_exist_ok=True)
+        for skill_md in skills_dst.rglob("*.md"):
+            text = skill_md.read_text(encoding="utf-8")
+            updated = text.replace("{{DEFAULT_CURRENCY}}", currency)
+            if updated != text:
+                skill_md.write_text(updated, encoding="utf-8")
 
     env_file = profile_dir / ".env"
     env_file.touch(exist_ok=True)
@@ -145,6 +159,7 @@ except repo.ValidationError as exc:
     _upsert_env_var(env_file, "EXPENSE_MCP_SERVER_PATH", env_path_value(MCP_DIR / "server.py"))
     _upsert_env_var(env_file, "EXPENSE_MEMBER_SLUG", slug)
     _upsert_env_var(env_file, "EXPENSE_LOCALE", locale)
+    _upsert_env_var(env_file, "EXPENSE_DEFAULT_CURRENCY", currency)
 
     write_env_paths(db_path)
 

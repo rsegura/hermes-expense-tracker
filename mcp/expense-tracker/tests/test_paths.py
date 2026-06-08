@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 from expense_tracker.paths import (
+    currency_file,
     db_path_override_file,
     default_db_path,
     expense_tracker_dir,
@@ -29,6 +30,7 @@ class PathsTests(unittest.TestCase):
                 self.assertEqual(expense_tracker_dir(), (hermes / "expense-tracker").resolve())
                 self.assertEqual(default_db_path(), (hermes / "expense-tracker" / "expenses.db").resolve())
                 self.assertEqual(locale_file(), (hermes / "expense-tracker" / "locale").resolve())
+                self.assertEqual(currency_file(), (hermes / "expense-tracker" / "currency").resolve())
                 self.assertEqual(db_path_override_file(), (hermes / "expense-tracker" / "db-path").resolve())
             finally:
                 os.environ.pop("HERMES_HOME", None)

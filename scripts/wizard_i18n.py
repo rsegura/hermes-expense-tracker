@@ -10,6 +10,15 @@ MESSAGES: dict[str, dict[str, str]] = {
         "prereq_intro": "Checking Python and Hermes Agent on your machine…",
         "prereq_check_python": "Python 3.11+",
         "prereq_check_hermes": "Hermes Agent (chat + Telegram)",
+        "currency_title": "Default currency",
+        "currency_intro": (
+            "Default currency for new expenses when none is specified.\n"
+            "You can still log USD, EUR, etc. per expense in chat."
+        ),
+        "currency_prompt": "Choice",
+        "currency_custom": "ISO 4217 code (3 letters, e.g. USD, EUR, ARS)",
+        "currency_invalid": "Invalid currency code (use 3-letter ISO, e.g. USD)",
+        "currency_saved": "Default currency",
         "db_title": "Shared database",
         "db_intro": (
             "All household members read and write the **same** SQLite file.\n\n"
@@ -84,6 +93,15 @@ MESSAGES: dict[str, dict[str, str]] = {
         "prereq_intro": "Verificando Python y Hermes Agent en tu máquina…",
         "prereq_check_python": "Python 3.11+",
         "prereq_check_hermes": "Hermes Agent (chat + Telegram)",
+        "currency_title": "Moneda por defecto",
+        "currency_intro": (
+            "Moneda por defecto para gastos nuevos cuando no se indique otra.\n"
+            "Igual podés registrar USD, EUR, etc. por gasto en el chat."
+        ),
+        "currency_prompt": "Opción",
+        "currency_custom": "Código ISO 4217 (3 letras, ej. USD, EUR, ARS)",
+        "currency_invalid": "Código inválido (usá 3 letras ISO, ej. USD)",
+        "currency_saved": "Moneda por defecto",
         "db_title": "Base compartida",
         "db_intro": (
             "Todos los miembros del hogar usan el **mismo** archivo SQLite.\n\n"

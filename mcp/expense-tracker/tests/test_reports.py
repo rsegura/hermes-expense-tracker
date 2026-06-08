@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -74,6 +75,50 @@ class ReportTests(unittest.TestCase):
         self.assertIn("June 2026", result["markdown"])
         self.assertIn("By category", result["markdown"])
         self.assertNotIn("Por categoría", result["markdown"])
+
+    def test_multi_currency_report_separate_totals(self) -> None:
+        repo.add_expense(
+            expense_date="2026-06-12",
+            description="Compra en pesos",
+            amount=150000,
+            currency="ARS",
+            category="supermercado",
+            paid_by="alice",
+            project="hogar",
+        )
+        repo.add_expense(
+            expense_date="2026-06-15",
+            description="Suscripción",
+            amount=30,
+            currency="EUR",
+            category="servicios",
+            paid_by="bob",
+            project="hogar",
+        )
+        result = reports.generate_report(period="month", year=2026, month=6)
+        md = result["markdown"]
+
+        self.assertTrue(result["multi_currency"])
+        self.assertIn("Total ARS:", md)
+        self.assertIn("Total USD:", md)
+        self.assertIn("Total EUR:", md)
+        self.assertIsNone(re.search(r"^Total: .+ · \d+ gasto\(s\)$", md, re.MULTILINE))
+        self.assertEqual(md.count("Por categoría"), 3)
+
+    def test_single_currency_filter_unchanged(self) -> None:
+        repo.add_expense(
+            expense_date="2026-06-12",
+            description="Compra en pesos",
+            amount=150000,
+            currency="ARS",
+            category="supermercado",
+            paid_by="alice",
+            project="hogar",
+        )
+        result = reports.generate_report(period="month", year=2026, month=6, currency="USD")
+        self.assertFalse(result["multi_currency"])
+        self.assertIn("Total: $135.000", result["markdown"])
+        self.assertNotIn("Total ARS:", result["markdown"])
 
 
 if __name__ == "__main__":

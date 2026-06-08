@@ -1,20 +1,22 @@
+<div align="center">
+
 # Hermes Expense Tracker
 
-**Shared household expenses, by chat.** Each family member gets their own assistant on [Hermes Agent](https://hermes-agent.nousresearch.com) — Telegram, CLI, or other channels — while everyone reads and writes the **same SQLite database**. All business logic lives in a Python MCP server; Hermes profiles only converse and call tools.
+**Shared household expenses, by chat.**
 
-Repository: [github.com/Canopix/hermes-expense-tracker](https://github.com/Canopix/hermes-expense-tracker)
+[Español](docs/es/README.md)
+
+</div>
+
+Each family member gets their own assistant on [Hermes Agent](https://hermes-agent.nousresearch.com) — Telegram, CLI, or other channels — while everyone reads and writes the **same SQLite database**. All business logic lives in a Python MCP server; Hermes profiles only converse and call tools.
 
 **Good fit for:** couples, families, roommates, or any group tracking shared spending without building a custom app.
-
-**Not in scope:** debt tracking, settlements, or “who owes whom” balances. You get `paid_by`, per-person **allocations** (who the expense is *for*), and reports comparing paid vs attributed totals — but no automatic debt ledger.
 
 ---
 
 ## Before you start
 
 This repo is a **Hermes profile + MCP pack** — not a standalone app. Install [Hermes Agent](https://hermes-agent.nousresearch.com) first (`hermes --version` >= 0.14.0), then clone this repo.
-
-The guided installer (`./install.sh`) uses **[Rich](https://github.com/Textualize/rich)** for panels and spinners — the same family of tools Hermes uses (Rich + `prompt_toolkit` + Typer). No Node.js required.
 
 **Platforms:** install scripts run on **macOS, Linux, WSL2, and Windows native** (PowerShell 5.1+). Same Python logic everywhere; pick the launcher for your OS:
 
@@ -57,8 +59,6 @@ The wizard asks for language, sets up the expense server + database, and creates
 | 5. First expense | `alice chat` | *"Log $50 at the pharmacy, I paid"* |
 
 **Note:** `alice` is the **shortcut alias**. The Hermes profile name is `expense-alice`. Deleting a profile does **not** delete `~/.hermes/expense-tracker/expenses.db`.
-
-Spanish docs: [`docs/es/README.md`](docs/es/README.md)
 
 ---
 

@@ -8,6 +8,7 @@ import re
 from datetime import datetime, timedelta
 from typing import Any, Literal
 
+from .currency import default_currency
 from .db import connect, init_db, row_to_dict, rows_to_dicts
 
 
@@ -706,6 +707,31 @@ def _where_clause(clauses: list[str]) -> str:
     return f"WHERE {' AND '.join(clauses)}" if clauses else ""
 
 
+def _fetch_by_currency(
+    conn,
+    *,
+    joins: str,
+    where: str,
+    params: list[Any],
+) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        f"""
+        SELECT sub.currency AS currency,
+               COALESCE(SUM(sub.amount), 0) AS total,
+               COUNT(*) AS count
+        FROM (
+            SELECT DISTINCT e.id, e.amount, e.currency FROM expenses e
+            {joins}
+            {where}
+        ) sub
+        GROUP BY sub.currency
+        ORDER BY total DESC, sub.currency
+        """,
+        params,
+    ).fetchall()
+    return rows_to_dicts(rows)
+
+
 def _category_parent_select(alias: str = "c") -> str:
     return (
         f"{alias}.name AS category, {alias}.slug AS category_slug, "
@@ -765,7 +791,7 @@ def add_expense(
     amount: float,
     category: str | int,
     paid_by: str | int,
-    currency: str = "ARS",
+    currency: str | None = None,
     project: str | int | None = None,
     notes: str | None = None,
     allocations: list[dict[str, Any]] | None = None,
@@ -773,6 +799,7 @@ def add_expense(
     if amount < 0:
         raise ValidationError("Amount must be >= 0")
     datetime.strptime(expense_date, "%Y-%m-%d")
+    resolved_currency = (currency or default_currency()).upper()
     with connect() as conn:
         category_row = _get_category_by_ref(conn, category)
         paid_by_row = _get_person_by_ref(conn, paid_by)
@@ -789,7 +816,7 @@ def add_expense(
                 expense_date,
                 description.strip(),
                 float(amount),
-                currency.upper(),
+                resolved_currency,
                 category_row["id"],
                 project_row["id"] if project_row else None,
                 paid_by_row["id"],
@@ -1101,6 +1128,7 @@ def monthly_summary(
                 [*params, person_row["id"]],
             ).fetchone()
             attributed_amount = attr["total"]
+        by_currency = _fetch_by_currency(conn, joins=joins, where=where, params=params)
     result: dict[str, Any] = {
         "period": {"year": year, "month": month, "start": start, "end_exclusive": end_exclusive},
         "filters": {
@@ -1112,6 +1140,7 @@ def monthly_summary(
         },
         "total_amount": total["total"],
         "expense_count": total["count"],
+        "by_currency": by_currency,
         "by_category": rows_to_dicts(by_category),
         "by_project": rows_to_dicts(by_project),
         "by_person": rows_to_dicts(by_person),
@@ -1201,6 +1230,7 @@ def yearly_summary(
             """,
             params,
         ).fetchall()
+        by_currency = _fetch_by_currency(conn, joins=joins, where=where, params=params)
     return {
         "year": year,
         "filters": {
@@ -1212,6 +1242,7 @@ def yearly_summary(
         },
         "total_amount": total["total"],
         "expense_count": total["count"],
+        "by_currency": by_currency,
         "by_month": rows_to_dicts(by_month),
         "by_category": rows_to_dicts(by_category),
         "by_project": rows_to_dicts(by_project),
@@ -1266,10 +1297,13 @@ def project_summary(
             """,
             params,
         ).fetchall()
+        by_currency = _fetch_by_currency(conn, joins=joins, where=where, params=params)
+        enriched_project = _enrich_project(conn, project_row)
     return {
-        "project": _enrich_project(conn, project_row),
+        "project": enriched_project,
         "total_amount": total["total"],
         "expense_count": total["count"],
+        "by_currency": by_currency,
         "by_category": rows_to_dicts(by_category),
     }
 
@@ -1763,10 +1797,11 @@ def export_expenses(
 def set_category_budget(
     category: str | int,
     monthly_amount: float,
-    currency: str = "ARS",
+    currency: str | None = None,
     alert_threshold_pct: float = 100.0,
     notes: str | None = None,
 ) -> dict[str, Any]:
+    resolved_currency = (currency or default_currency()).upper()
     if monthly_amount < 0:
         raise ValidationError("monthly_amount must be >= 0")
     if alert_threshold_pct <= 0:
@@ -1790,7 +1825,7 @@ def set_category_budget(
             (
                 category_row["id"],
                 float(monthly_amount),
-                currency.upper(),
+                resolved_currency,
                 float(alert_threshold_pct),
                 notes,
             ),

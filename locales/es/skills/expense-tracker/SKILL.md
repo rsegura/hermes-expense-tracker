@@ -37,9 +37,11 @@ Proyecto personal = sin `members`. Compartido = owner + `members`. Gastos sin pr
 - `export_expenses_file(export_format, filtros…)` — guarda en `~/.hermes/expense-tracker/exports/`, devuelve `file_path`
 
 ### Reportes unificados y gráficos
-- `generate_report(period?, year?, month?, project?, include_ascii_charts?)`
+- `generate_report(period?, year?, month?, project?, currency?, include_ascii_charts?)`
   - `period`: `month` (default), `year`, `project` (requiere `project`)
   - Devuelve `markdown` listo para Telegram + `summary`, `top_expenses`, alertas de presupuesto
+  - Sin `currency` y con gastos en varias monedas: totales y categorías **separados por moneda** en un solo reporte (no suma mezclada)
+  - Para una sola moneda: pasá `currency="USD"` (o la que corresponda)
 - `render_chart(chart_type, year?, month?, project?)` → **imagen PNG**
   - `by_category` — torta del mes (o año si sin `month`)
   - `by_project` — barras horizontales por proyecto
@@ -93,7 +95,8 @@ Todos aceptan filtros opcionales salvo donde se indica el parámetro obligatorio
 
 ## Ejemplos de consultas
 
-- "¿Cuánto gastamos en junio?" → `generate_report(period="month", year=2026, month=6)` o `monthly_summary`
+- "¿Cuánto gastamos en junio?" → `generate_report(period="month", year=2026, month=6)` (si hay varias monedas, el reporte las separa)
+- "¿Cuánto gastamos en USD este mes?" → `generate_report(period="month", year=2026, month=6, currency="USD")`
 - "Resumen del casamiento" → `generate_report(period="project", project="casamiento")`
 - "Gráfico de gastos por categoría" → `render_chart("by_category", year=2026, month=6)` + enviar imagen
 - "Exportá junio en CSV" → `export_expenses_file("csv", start_date="2026-06-01", end_date="2026-06-30")`
@@ -113,7 +116,7 @@ Todos aceptan filtros opcionales salvo donde se indica el parámetro obligatorio
 ## Formato de respuesta
 
 - Listas o tablas compactas para reportes.
-- Montos con separador de miles y moneda (ej. `$ 15.500 ARS`).
+- Montos con separador de miles y moneda (ej. `$ 15.500 {{DEFAULT_CURRENCY}}`).
 - Si falta un dato obligatorio, preguntá una sola cosa concreta.
 - No narres tools ni pasos intermedios.
 
@@ -131,7 +134,7 @@ Ejemplo bueno:
 Listo ✅
 
 - 📅 Fecha: 06/06/2026
-- 💰 Monto: $150.000 ARS
+- 💰 Monto: $150.000 {{DEFAULT_CURRENCY}}
 - 🏷️ Categoría: Hotel (Viajes)
 - 👤 Pagador: Alice
 - 📊 Reparto: 100% Alice

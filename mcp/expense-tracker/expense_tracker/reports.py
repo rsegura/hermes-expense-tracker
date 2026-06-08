@@ -7,6 +7,7 @@ from typing import Any, Literal
 
 from . import i18n
 from . import repositories as repo
+from .currency import default_currency, format_money
 from .db import get_db_path
 
 ChartType = Literal["by_category", "by_project", "monthly_trend", "top_expenses"]
@@ -27,29 +28,95 @@ def _charts_dir() -> Path:
     return path
 
 
-def _format_money(amount: float, currency: str = "ARS") -> str:
-    rounded = int(round(amount))
-    if i18n.get_locale() == "en":
-        text = f"{rounded:,}"
-    else:
-        text = f"{rounded:,}".replace(",", ".")
-    if currency == "ARS":
-        return f"${text}"
-    return f"{text} {currency}"
-
-
-def _ascii_bar(label: str, value: float, max_value: float, width: int = 20) -> str:
+def _ascii_bar(label: str, value: float, max_value: float, width: int = 20, *, currency: str | None = None) -> str:
     if max_value <= 0:
         fill = 0
     else:
         fill = max(1, int(round((value / max_value) * width))) if value > 0 else 0
     bar = "█" * fill + "░" * (width - fill)
-    return f"{label[:18]:<18} {bar} {_format_money(value)}"
+    return f"{label[:18]:<18} {bar} {format_money(value, currency)}"
 
 
 def _default_year_month() -> tuple[int, int]:
     today = date.today()
     return today.year, today.month
+
+
+def _category_label(row: dict[str, Any]) -> str:
+    return str(row.get("parent_category") or row.get("category") or row.get("category_slug", ""))
+
+
+def _is_multi_currency(summary: dict[str, Any], currency: str | None) -> bool:
+    if currency:
+        return False
+    by_currency = summary.get("by_currency") or []
+    return len(by_currency) > 1
+
+
+def _display_currency(summary: dict[str, Any], currency: str | None) -> str | None:
+    if currency:
+        return currency.upper()
+    by_currency = summary.get("by_currency") or []
+    if len(by_currency) == 1:
+        return by_currency[0]["currency"]
+    return None
+
+
+def _period_summary(
+    period: ReportPeriod,
+    *,
+    year: int,
+    month: int,
+    project: str | int | None,
+    currency: str,
+) -> dict[str, Any]:
+    if period == "project":
+        if project is None:
+            raise repo.ValidationError("project is required when period='project'")
+        return repo.project_summary(project, currency=currency)
+    if period == "year":
+        return repo.yearly_summary(year, project=project, currency=currency)
+    return repo.monthly_summary(year, month, project=project, currency=currency)
+
+
+def _append_category_section(
+    lines: list[str],
+    by_category: list[dict[str, Any]],
+    *,
+    include_ascii_charts: bool,
+    currency: str | None,
+) -> None:
+    if not by_category:
+        return
+    lines.append(i18n.t("by_category"))
+    max_cat = max((row["total"] for row in by_category), default=0)
+    for row in by_category[:10]:
+        label = _category_label(row)
+        if include_ascii_charts:
+            lines.append(_ascii_bar(label, float(row["total"]), float(max_cat), currency=currency))
+        else:
+            lines.append(f"- {label}: {format_money(row['total'], currency)} ({row['count']})")
+    lines.append("")
+
+
+def _append_project_section(
+    lines: list[str],
+    by_project: list[dict[str, Any]],
+    *,
+    include_ascii_charts: bool,
+    currency: str | None,
+) -> None:
+    if not by_project:
+        return
+    lines.append(i18n.t("by_project"))
+    max_proj = max((row["total"] for row in by_project), default=0)
+    for row in by_project[:10]:
+        name = row.get("project") or i18n.t("no_project")
+        if include_ascii_charts:
+            lines.append(_ascii_bar(str(name), float(row["total"]), float(max_proj), currency=currency))
+        else:
+            lines.append(f"- {name}: {format_money(row['total'], currency)} ({row['count']})")
+    lines.append("")
 
 
 def generate_report(
@@ -98,6 +165,9 @@ def generate_report(
         by_category = summary["by_category"]
         by_project = summary["by_project"]
 
+    multi_currency = _is_multi_currency(summary, currency)
+    display_currency = _display_currency(summary, currency)
+
     caller = repo.get_caller_slug()
     lines = [title, ""]
 
@@ -105,35 +175,62 @@ def generate_report(
         lines.append(f"{i18n.t('member')}: {caller}")
     if project and period != "project":
         lines.append(f"{i18n.t('project_filter')}: {project}")
-    lines.append(i18n.t("total_line", amount=_format_money(total), count=count))
-    lines.append("")
 
-    if by_category:
-        lines.append(i18n.t("by_category"))
-        max_cat = max((row["total"] for row in by_category), default=0)
-        for row in by_category[:10]:
-            label = row.get("parent_category") or row.get("category") or row.get("category_slug", "")
-            if include_ascii_charts:
-                lines.append(_ascii_bar(str(label), float(row["total"]), float(max_cat)))
-            else:
-                lines.append(f"- {label}: {_format_money(row['total'])} ({row['count']})")
+    if multi_currency:
+        for row in summary["by_currency"]:
+            lines.append(
+                i18n.t(
+                    "total_by_currency",
+                    currency=row["currency"],
+                    amount=format_money(row["total"], row["currency"]),
+                    count=row["count"],
+                )
+            )
         lines.append("")
-
-    if by_project:
-        lines.append(i18n.t("by_project"))
-        max_proj = max((row["total"] for row in by_project), default=0)
-        for row in by_project[:10]:
-            name = row.get("project") or i18n.t("no_project")
-            if include_ascii_charts:
-                lines.append(_ascii_bar(str(name), float(row["total"]), float(max_proj)))
-            else:
-                lines.append(f"- {name}: {_format_money(row['total'])} ({row['count']})")
+        for row in summary["by_currency"]:
+            cur = row["currency"]
+            lines.append(i18n.t("section_currency", currency=cur))
+            cur_summary = _period_summary(
+                period,
+                year=year,
+                month=month,
+                project=project if period == "project" else project,
+                currency=cur,
+            )
+            _append_category_section(
+                lines,
+                cur_summary["by_category"],
+                include_ascii_charts=include_ascii_charts,
+                currency=cur,
+            )
+            if cur_summary.get("by_project"):
+                _append_project_section(
+                    lines,
+                    cur_summary["by_project"],
+                    include_ascii_charts=include_ascii_charts,
+                    currency=cur,
+                )
+    else:
+        lines.append(i18n.t("total_line", amount=format_money(total, display_currency), count=count))
         lines.append("")
+        _append_category_section(
+            lines,
+            by_category,
+            include_ascii_charts=include_ascii_charts,
+            currency=display_currency,
+        )
+        if by_project:
+            _append_project_section(
+                lines,
+                by_project,
+                include_ascii_charts=include_ascii_charts,
+                currency=display_currency,
+            )
 
-    if period == "month" and summary.get("by_person"):
+    if period == "month" and summary.get("by_person") and not multi_currency:
         lines.append(i18n.t("attributed_by_person"))
         for row in summary["by_person"][:10]:
-            lines.append(f"- {row['person']}: {_format_money(row['attributed_total'])}")
+            lines.append(f"- {row['person']}: {format_money(row['attributed_total'], display_currency)}")
         lines.append("")
 
     if top.get("items"):
@@ -142,18 +239,20 @@ def generate_report(
             proj = ""
             if item.get("project"):
                 proj = f" · {item['project']['name']}"
+            item_currency = item.get("currency") or display_currency
             lines.append(
                 f"- {item['expense_date']} · {item['description'][:40]} · "
-                f"{_format_money(item['amount'])}{proj}"
+                f"{format_money(item['amount'], item_currency)}{proj}"
             )
         lines.append("")
 
     if budgets and budgets.get("alerts"):
         lines.append(i18n.t("budget_alerts"))
         for item in budgets["alerts"]:
+            item_currency = item.get("currency") or display_currency
             lines.append(
-                f"- {item['category_name']}: {_format_money(item['spent'])} / "
-                f"{_format_money(item['budgeted'])} ({item['percent_used']:.0f}%)"
+                f"- {item['category_name']}: {format_money(item['spent'], item_currency)} / "
+                f"{format_money(item['budgeted'], item_currency)} ({item['percent_used']:.0f}%)"
             )
         lines.append("")
 
@@ -163,6 +262,7 @@ def generate_report(
         "title": title,
         "total_amount": total,
         "expense_count": count,
+        "multi_currency": multi_currency,
         "markdown": markdown,
         "summary": summary,
         "top_expenses": top,
@@ -340,7 +440,7 @@ def render_chart(
     elif chart_type == "monthly_trend":
         ax.plot(labels, values, marker="o", color="#2563eb", linewidth=2)
         ax.fill_between(range(len(values)), values, alpha=0.15, color="#2563eb")
-        ax.set_ylabel("ARS")
+        ax.set_ylabel(currency or default_currency())
         plt.xticks(rotation=45, ha="right")
     else:
         y_pos = range(len(labels))
@@ -348,7 +448,7 @@ def render_chart(
         ax.set_yticks(list(y_pos))
         ax.set_yticklabels(labels)
         ax.invert_yaxis()
-        ax.set_xlabel("ARS")
+        ax.set_xlabel(currency or default_currency())
 
     ax.set_title(title, fontsize=14, fontweight="bold", pad=12)
     plt.tight_layout()

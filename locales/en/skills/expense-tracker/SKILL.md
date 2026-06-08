@@ -33,7 +33,9 @@ Personal project = no `members`. Shared = owner + `members`. Expenses without a 
 - `compare_months`, `compare_periods`, `top_expenses`, `export_expenses`, `export_expenses_file`
 
 ### Unified reports and charts
-- `generate_report(period?, year?, month?, project?, include_ascii_charts?)`
+- `generate_report(period?, year?, month?, project?, currency?, include_ascii_charts?)`
+  - Without `currency` and multiple currencies in the period: totals and categories are **split per currency** in one report (no mixed sum)
+  - For a single currency: pass `currency="USD"` (or the relevant code)
 - `render_chart(chart_type, year?, month?, project?)` → **PNG image** — send to user
 
 ### Category budgets
@@ -45,7 +47,8 @@ Personal project = no `members`. Shared = owner + `members`. Expenses without a 
 
 ## Example queries
 
-- "How much in June?" → `generate_report(period="month", year=2026, month=6)`
+- "How much in June?" → `generate_report(period="month", year=2026, month=6)` (multi-currency periods are split per currency)
+- "How much in USD this month?" → `generate_report(period="month", year=2026, month=6, currency="USD")`
 - "Wedding project summary" → `generate_report(period="project", project="wedding")`
 - "Category chart for June" → `render_chart("by_category", year=2026, month=6)` + send image
 - "Export June as CSV" → `export_expenses_file("csv", start_date="2026-06-01", end_date="2026-06-30")`
@@ -53,5 +56,5 @@ Personal project = no `members`. Shared = owner + `members`. Expenses without a 
 ## Response format
 
 - Compact lists or tables for reports.
-- Amounts with thousands separator and currency (e.g. `$ 15,500 ARS`).
+- Amounts with thousands separator and currency (e.g. `$ 15,500 {{DEFAULT_CURRENCY}}`).
 - When logging an expense, use the Done ✅ block from SOUL.

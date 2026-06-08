@@ -29,6 +29,10 @@ def locale_file() -> Path:
     return expense_tracker_dir() / "locale"
 
 
+def currency_file() -> Path:
+    return expense_tracker_dir() / "currency"
+
+
 def is_legacy_db_path(path: Path) -> bool:
     """Ignore pre-move defaults under ~/expenses/ (not ~/.hermes/expense-tracker/)."""
     parts = path.expanduser().resolve().parts
