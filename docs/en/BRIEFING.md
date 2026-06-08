@@ -18,7 +18,7 @@ Member profile B (Telegram/CLI)
         ↓  tools: mcp_expense_tracker_*
 Expense Tracker MCP (FastMCP, stdio, Python)
         ↓
-~/expenses/data/expenses.db (shared SQLite)
+~/.hermes/expense-tracker/expenses.db (shared SQLite)
 ```
 
 ### Domain restriction
@@ -37,10 +37,10 @@ Hermes memory disabled: `memory.memory_enabled: false`
 |------|------|
 | Product repo | `~/hermes-expense-tracker/` |
 | MCP server | `~/hermes-expense-tracker/mcp/expense-tracker/` |
-| Shared DB | `~/expenses/data/expenses.db` |
+| Shared DB | `~/.hermes/expense-tracker/expenses.db` |
 | Runtime profiles | `~/.hermes/profiles/<slug>/` |
 | Hermes global | `~/.hermes/` |
-| Household locale | `~/expenses/locale` |
+| Household locale | `~/.hermes/expense-tracker/locale` |
 
 ---
 
@@ -76,7 +76,7 @@ Projects have **per-person membership** (`project_members`). Each MCP profile re
 
 ## Internationalization
 
-- Wizard asks language first; saves `~/.expenses/locale`
+- Wizard asks language first; saves `~/.hermes/expense-tracker/locale`
 - `EXPENSE_LOCALE` (`en` \| `es`) in profile `.env` and MCP env
 - Agent copy from `locales/${LOCALE}/`
 - Report/chart strings via `expense_tracker/i18n.py`

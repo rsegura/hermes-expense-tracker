@@ -21,7 +21,7 @@ validate_member_slug() {
     return 1
   fi
   if [[ "${slug}" == expense-* ]]; then
-    echo "No uses slug con prefijo expense-; poné solo el nombre (ej. johanna)" >&2
+    echo "No uses slug con prefijo expense-; poné solo el nombre (ej. alice)" >&2
     return 1
   fi
   return 0

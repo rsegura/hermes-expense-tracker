@@ -34,7 +34,7 @@ Proyecto personal = sin `members`. Compartido = owner + `members`. Gastos sin pr
 - `compare_periods(period_a_start, period_a_end, period_b_start, period_b_end, filtros…)`
 - `top_expenses(limit?, year?, month?, sort_by?, filtros…)` — `sort_by`: `amount_desc`, `amount_asc`, `date_desc`, `date_asc`
 - `export_expenses(export_format, filtros…)` — `csv` o `json`; devuelve `content` como texto
-- `export_expenses_file(export_format, filtros…)` — guarda en `~/expenses/data/exports/`, devuelve `file_path`
+- `export_expenses_file(export_format, filtros…)` — guarda en `~/.hermes/expense-tracker/exports/`, devuelve `file_path`
 
 ### Reportes unificados y gráficos
 - `generate_report(period?, year?, month?, project?, include_ascii_charts?)`
@@ -45,7 +45,7 @@ Proyecto personal = sin `members`. Compartido = owner + `members`. Gastos sin pr
   - `by_project` — barras horizontales por proyecto
   - `monthly_trend` — evolución mes a mes del año
   - `top_expenses` — top gastos del período
-  - Guarda en `~/expenses/data/charts/`; **enviar la imagen** al usuario
+  - Guarda en `~/.hermes/expense-tracker/charts/`; **enviar la imagen** al usuario
 
 ### Presupuestos por categoría
 - `set_category_budget(category, monthly_amount, currency?, alert_threshold_pct?, notes?)`
@@ -98,7 +98,7 @@ Todos aceptan filtros opcionales salvo donde se indica el parámetro obligatorio
 - "Gráfico de gastos por categoría" → `render_chart("by_category", year=2026, month=6)` + enviar imagen
 - "Exportá junio en CSV" → `export_expenses_file("csv", start_date="2026-06-01", end_date="2026-06-30")`
 - "¿Cuánto en hogar en junio?" → `monthly_summary(2026, 6, project="hogar")`
-- "Creá proyecto Casamiento con Johanna" → `create_project("Casamiento", members=["johanna"])`
+- "Creá proyecto Casamiento con Bob" → `create_project("Casamiento", members=["bob"])`
 - "¿Qué proyectos tengo?" → `list_projects(active_only=true)`
 - "Sumá a Bob al casamiento" → `add_project_member("casamiento", "bob")`
 - "Gastos de alice en junio" → `list_expenses(allocated_to="alice", start_date="2026-06-01", end_date="2026-06-30")`
@@ -133,8 +133,8 @@ Listo ✅
 - 📅 Fecha: 06/06/2026
 - 💰 Monto: $150.000 ARS
 - 🏷️ Categoría: Hotel (Viajes)
-- 👤 Pagador: Emanuel
-- 📊 Reparto: 100% Emanuel
+- 👤 Pagador: Alice
+- 📊 Reparto: 100% Alice
 
 ¿Algo más?
 ```

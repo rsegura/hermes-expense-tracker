@@ -26,6 +26,6 @@ tools:
   default_enabled: all
 
 post_install: |
-  Run bootstrap.sh from the hermes-expense-tracker repo root to create ~/expenses/data/expenses.db.
+  Run bootstrap.sh from the hermes-expense-tracker repo root to create ~/.hermes/expense-tracker/expenses.db.
   Set EXPENSE_* paths in each profile (install.sh / add-member.sh); config.yaml references them via ${EXPENSE_DB_PATH}, etc.
   Start a new Hermes session to load expense-tracker tools.

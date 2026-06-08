@@ -18,7 +18,7 @@ Perfil miembro B (Telegram/CLI)
         ↓  tools: mcp_expense_tracker_*
 Expense Tracker MCP (FastMCP, stdio, Python)
         ↓
-~/expenses/data/expenses.db (SQLite compartida)
+~/.hermes/expense-tracker/expenses.db (SQLite compartida)
 ```
 
 ### Restricción de dominio
@@ -37,7 +37,7 @@ Memoria Hermes deshabilitada: `memory.memory_enabled: false`
 |-----|------|
 | Repo producto | `~/hermes-expense-tracker/` |
 | MCP server | `~/hermes-expense-tracker/mcp/expense-tracker/` |
-| DB compartida | `~/expenses/data/expenses.db` |
+| DB compartida | `~/.hermes/expense-tracker/expenses.db` |
 | Perfiles runtime | `~/.hermes/profiles/<slug>/` |
 | Hermes global | `~/.hermes/` |
 

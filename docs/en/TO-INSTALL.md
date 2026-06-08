@@ -10,55 +10,63 @@ Install **Hermes Expense Tracker**: shared household expenses. Each member can h
 
 ## Requirements
 
-- macOS or Linux with `python3` 3.11+
+- Python 3.11+ (`python3`, `python`, or Windows `py`)
 - [Hermes Agent](https://hermes-agent.nousresearch.com) >= 0.14.0 on PATH (`hermes --version`)
-- Model and Telegram are configured **after** install in each Hermes profile (`config.yaml` / `hermes setup` / `gateway setup`) — not part of `install.sh`
+- macOS, Linux, WSL2, or **Windows native** (PowerShell 5.1+)
+- Model and Telegram are configured **after** install in each Hermes profile — not part of the installer
 
-`install.sh` automatically checks python3, that `hermes` exists, responds, meets the minimum version, and that `hermes profile list` works.
-
-## Steps (in terminal)
+## Steps (Unix — bash)
 
 ```bash
 cd ~
 git clone https://github.com/Canopix/hermes-expense-tracker.git hermes-expense-tracker
 cd hermes-expense-tracker
-chmod +x install.sh bootstrap.sh add-member.sh
+chmod +x install.sh bootstrap.sh add-member.sh update.sh
 ./install.sh
 ```
 
-The `install.sh` wizard asks interactively:
+## Steps (Windows — PowerShell)
 
-1. **Household language** — `English` or `Español` (bot copy + report labels)
-2. Whether to run bootstrap (MCP + DB) — say yes
-3. **How many members** will have their own bot
-4. For each: **display name** and **slug** (e.g. `maria` / `Maria`)
-5. Whether there are people **without a bot** (expenses only)
-6. Whether to create default projects (home, vacation, health)
+```powershell
+cd $HOME
+git clone https://github.com/Canopix/hermes-expense-tracker.git hermes-expense-tracker
+cd hermes-expense-tracker
+.\install.ps1
+```
 
-## After install (per member)
+The wizard:
 
-At the path printed by `add-member.sh` (typically `~/.hermes/profiles/expense-<slug>/`):
+1. Asks **household language** (English / Español)
+2. Shows the **shared database path** (default `~/.hermes/expense-tracker/expenses.db`) — Enter to keep, or type another path
+3. Checks Python + Hermes (with spinners — uses Rich, like Hermes CLI)
+4. On **first install**, sets up the expense server + database at that path (no confusing “bootstrap” question)
+5. On **reinstall**, reuses existing database if present
+6. Asks how many members, name + slug each
+7. Optional people without bot, optional starter projects
+
+## After install (each member, in order)
 
 | Step | Command |
 |------|---------|
-| Model | `hermes -p <slug> setup` |
-| Gateway | `<slug> gateway setup && <slug> gateway start` |
-| Pairing | `hermes -p <slug> pairing approve telegram <CODE>` |
-| Verify MCP | `hermes -p <slug> mcp test expense-tracker` → 38 tools |
+| 1. Model | `hermes -p alice setup` |
+| 2. MCP test | `hermes -p expense-alice mcp test expense-tracker` |
+| 3. Telegram | [@BotFather](https://t.me/BotFather) → `alice gateway setup` then `alice gateway start` (Windows: run both commands; Unix: `&&` ok) |
+| 4. Pairing | Message bot → `hermes -p alice pairing approve telegram <CODE>` |
+| 5. Chat | `alice chat` |
+
+Deleting a Hermes profile does **not** delete the expense database (default `~/.hermes/expense-tracker/expenses.db`, or your custom path in `~/.hermes/expense-tracker/db-path`).
 
 ## Onboarding in Hermes (conversational)
 
 When MCP is working:
 
 ```bash
-<primary-slug> chat
+alice chat
 ```
 
 Say: *"Let's set up"* or *"First time"*.
 
-The agent (`onboarding` skill) guides: extra projects, budgets, first expense. It **does not** create Hermes profiles — that is only via `install.sh` / `add-member.sh`.
-
-## Verification
+## Verification (developers)
 
 ```bash
 cd ~/hermes-expense-tracker/mcp/expense-tracker
@@ -67,6 +75,5 @@ cd ~/hermes-expense-tracker/mcp/expense-tracker
 
 ## Do not
 
-- Do not commit `config.yaml` with secrets or runtime profile tokens
-- Do not put real people's data in the repo (only in `~/expenses/data/expenses.db`)
-- Do not compute debts between people (out of scope)
+- Do not commit profile secrets or Telegram tokens
+- Do not put household expense data in the git repo (only in `~/.hermes/expense-tracker/expenses.db`)

@@ -10,53 +10,63 @@ Instalar **Hermes Expense Tracker**: gastos compartidos del hogar. Cada miembro 
 
 ## Requisitos
 
-- macOS o Linux con `python3` 3.11+
+- Python 3.11+ (`python3`, `python`, o `py` en Windows)
 - [Hermes Agent](https://hermes-agent.nousresearch.com) >= 0.14.0 en PATH (`hermes --version`)
-- Modelo y Telegram se configuran **después** en cada perfil Hermes (`config.yaml` / `hermes setup` / `gateway setup`) — no es parte de `install.sh`
+- macOS, Linux, WSL2 o **Windows nativo** (PowerShell 5.1+)
+- Modelo y Telegram se configuran **después** en cada perfil Hermes — no es parte del instalador
 
-`install.sh` verifica automáticamente python3, que `hermes` exista, responda, cumpla versión mínima y que `hermes profile list` funcione.
-
-## Pasos (en terminal)
+## Pasos (Unix — bash)
 
 ```bash
 cd ~
 git clone https://github.com/Canopix/hermes-expense-tracker.git hermes-expense-tracker
 cd hermes-expense-tracker
-chmod +x install.sh bootstrap.sh add-member.sh
+chmod +x install.sh bootstrap.sh add-member.sh update.sh
 ./install.sh
 ```
 
-El script `install.sh` pregunta interactivamente:
+## Pasos (Windows — PowerShell)
 
-1. **Idioma del hogar** — `English` o `Español` (SOUL, skills y reportes)
-2. Si correr bootstrap (MCP + DB) — decir que sí
-3. **Cuántos miembros** tendrán bot propio
-4. Por cada uno: **nombre** y **slug** (ej. `maria` / `María`)
-5. Si hay personas **sin bot** (solo en gastos)
-6. Si crear proyectos default (hogar, vacaciones, salud)
+```powershell
+cd $HOME
+git clone https://github.com/Canopix/hermes-expense-tracker.git hermes-expense-tracker
+cd hermes-expense-tracker
+.\install.ps1
+```
 
-## Después del install (por cada miembro)
+El wizard:
 
-En la ruta que imprime `add-member.sh` (típico `~/.hermes/profiles/expense-<slug>/`):
+1. Pregunta **idioma del hogar** (`English` / `Español`)
+2. Muestra la **ruta de la base compartida** (default `~/.hermes/expense-tracker/expenses.db`) — Enter para default, o escribí otra ruta
+3. Verifica Python + Hermes (con indicadores de progreso — usa Rich, como el CLI de Hermes)
+4. En la **primera instalación**, prepara servidor + base en esa ruta (sin preguntar “bootstrap”)
+5. En **reinstalación**, reutiliza la base existente si ya está
+6. Pregunta cuántos miembros, nombre + slug de cada uno
+7. Personas sin bot y proyectos iniciales (opcional)
 
-1. Modelo: `hermes setup` o editar `config.yaml` del perfil
-2. `<slug> gateway setup && <slug> gateway start`
-3. `hermes -p <slug> pairing approve telegram <CODIGO>`
-4. `hermes -p <slug> mcp test expense-tracker` → debe mostrar 38 tools
+## Después del install (por miembro, en orden)
+
+| Paso | Comando |
+|------|---------|
+| 1. Modelo | `hermes -p alice setup` |
+| 2. MCP test | `hermes -p expense-alice mcp test expense-tracker` |
+| 3. Telegram | [@BotFather](https://t.me/BotFather) → `alice gateway setup && alice gateway start` |
+| 4. Pairing | Escribir al bot → `hermes -p alice pairing approve telegram <CODIGO>` |
+| 5. Chat | `alice chat` |
+
+Borrar un perfil Hermes **no** borra la base de gastos (default `~/.hermes/expense-tracker/expenses.db`, o tu ruta custom en `~/.hermes/expense-tracker/db-path`).
 
 ## Onboarding en Hermes (conversacional)
 
 Cuando el MCP ya funciona:
 
 ```bash
-<slug-principal> chat
+alice chat
 ```
 
 Decir: *"Empecemos la configuración"* o *"Primera vez"*.
 
-El agente (skill `onboarding`) guía: proyectos extra, presupuestos, primer gasto. **No** crea perfiles Hermes — eso solo vía `install.sh` / `add-member.sh`.
-
-## Verificación
+## Verificación (desarrolladores)
 
 ```bash
 cd ~/hermes-expense-tracker/mcp/expense-tracker
@@ -65,6 +75,5 @@ cd ~/hermes-expense-tracker/mcp/expense-tracker
 
 ## No hacer
 
-- No commitear `config.yaml` con secrets ni tokens del perfil runtime
-- No poner datos de personas reales en el repo (solo en `~/expenses/data/expenses.db`)
-- No calcular deudas entre personas (fuera de scope)
+- No commitear secrets del perfil ni tokens de Telegram
+- No poner datos del hogar en el repo (solo en `~/.hermes/expense-tracker/expenses.db`)

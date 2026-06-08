@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 # Resolve household locale (en | es) for installs and updates.
 
+# shellcheck source=scripts/lib/hermes-home.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/hermes-home.sh"
+
+LOCALE_FILE="$(expense_tracker_data_dir)/locale"
+
 resolve_expense_locale() {
   local locale="${EXPENSE_LOCALE:-}"
-  local locale_file="${HOME}/expenses/locale"
 
-  if [[ -z "${locale}" && -f "${locale_file}" ]]; then
-    locale="$(tr -d '[:space:]' < "${locale_file}")"
+  if [[ -z "${locale}" && -f "${LOCALE_FILE}" ]]; then
+    locale="$(tr -d '[:space:]' < "${LOCALE_FILE}")"
   fi
 
   case "${locale}" in
@@ -24,6 +28,6 @@ resolve_expense_locale() {
 
 save_household_locale() {
   local locale="$1"
-  mkdir -p "${HOME}/expenses"
-  printf '%s\n' "${locale}" > "${HOME}/expenses/locale"
+  mkdir -p "$(expense_tracker_data_dir)"
+  printf '%s\n' "${locale}" > "${LOCALE_FILE}"
 }

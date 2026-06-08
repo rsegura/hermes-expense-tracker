@@ -7,14 +7,11 @@ from typing import Any, Literal
 
 SeedMode = Literal["none", "categories", "test"]
 
-
-def _expand_path(path: str) -> Path:
-    return Path(os.path.expanduser(path)).resolve()
+from .paths import resolve_db_path
 
 
 def get_db_path() -> Path:
-    raw = os.getenv("EXPENSE_DB_PATH", "~/expenses/data/expenses.db")
-    return _expand_path(raw)
+    return resolve_db_path()
 
 
 def get_schema_path() -> Path:

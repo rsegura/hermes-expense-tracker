@@ -15,7 +15,7 @@ env_requires:
   - name: EXPENSE_DB_PATH
     description: "Shared SQLite DB for all household profiles"
     required: true
-    default: "~/expenses/data/expenses.db"
+    default: "~/.hermes/expense-tracker/expenses.db"
   - name: EXPENSE_LOCALE
     description: "Household locale for reports and agent copy (en or es)"
     required: true

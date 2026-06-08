@@ -4,8 +4,8 @@
 
 # MCP runtime
 mcp/expense-tracker/.venv/
-mcp/expense-tracker/**/__pycache__/
-mcp/expense-tracker/**/*.pyc
+**/__pycache__/
+**/*.pyc
 .pytest_cache/
 
 # Local databases (shared DB lives outside the repo by default)

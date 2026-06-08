@@ -19,11 +19,6 @@ def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
 
 
 def _default_owner_id(conn: sqlite3.Connection) -> int | None:
-    row = conn.execute(
-        "SELECT id FROM persons WHERE slug = 'emanuel' ORDER BY id LIMIT 1",
-    ).fetchone()
-    if row is not None:
-        return int(row["id"])
     row = conn.execute("SELECT id FROM persons ORDER BY created_at, id LIMIT 1").fetchone()
     return int(row["id"]) if row is not None else None
 

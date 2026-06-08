@@ -492,11 +492,6 @@ def sync_project_members_all_persons(project_ref: str | int) -> dict[str, Any]:
 
 
 def _default_owner_id_for_project(conn) -> int | None:
-    row = conn.execute(
-        "SELECT id FROM persons WHERE slug = 'emanuel' ORDER BY id LIMIT 1",
-    ).fetchone()
-    if row is not None:
-        return int(row["id"])
     row = conn.execute("SELECT id FROM persons ORDER BY created_at, id LIMIT 1").fetchone()
     return int(row["id"]) if row is not None else None
 

@@ -606,7 +606,7 @@ def export_expenses_file(
     currency: str | None = None,
     limit: int = 5000,
 ) -> str:
-    """Export filtered expenses to a file under ~/expenses/data/exports/."""
+    """Export filtered expenses to a file under ~/.hermes/expense-tracker/exports/."""
     try:
         return _ok(
             reports.export_expenses_to_file(

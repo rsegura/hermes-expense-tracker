@@ -10,22 +10,53 @@ Repository: [github.com/Canopix/hermes-expense-tracker](https://github.com/Canop
 
 ---
 
+## Before you start
+
+This repo is a **Hermes profile + MCP pack** — not a standalone app. Install [Hermes Agent](https://hermes-agent.nousresearch.com) first (`hermes --version` >= 0.14.0), then clone this repo.
+
+The guided installer (`./install.sh`) uses **[Rich](https://github.com/Textualize/rich)** for panels and spinners — the same family of tools Hermes uses (Rich + `prompt_toolkit` + Typer). No Node.js required.
+
+**Platforms:** install scripts run on **macOS, Linux, WSL2, and Windows native** (PowerShell 5.1+). Same Python logic everywhere; pick the launcher for your OS:
+
+| OS | Guided install | Bootstrap / add member / update |
+|----|----------------|----------------------------------|
+| macOS / Linux / WSL | `./install.sh` | `./bootstrap.sh` · `./add-member.sh` · `./update.sh` |
+| Windows (PowerShell) | `.\install.ps1` | `.\bootstrap.ps1` · `.\add-member.ps1` · `.\update.ps1` |
+
+Household data lives under `%USERPROFILE%\.hermes\expense-tracker\` (same layout as `~/.hermes/expense-tracker/`). Override with `HERMES_HOME` if you use a custom Hermes data directory.
+
+---
+
 ## Quick start (Hermes already installed)
+
+**macOS / Linux / WSL:**
 
 ```bash
 git clone https://github.com/Canopix/hermes-expense-tracker.git ~/hermes-expense-tracker
 cd ~/hermes-expense-tracker
-chmod +x install.sh bootstrap.sh add-member.sh
+chmod +x install.sh bootstrap.sh add-member.sh update.sh
 ./install.sh
 ```
 
-Then **per member** (replace `alice` with your slug):
+**Windows (PowerShell):**
 
-- [ ] `hermes -p alice setup` — model + API key
-- [ ] `alice gateway setup && alice gateway start` — Telegram bot
-- [ ] `hermes -p alice pairing approve telegram <CODE>`
-- [ ] `hermes -p alice mcp test expense-tracker` — expect **38 tools, ✓ Connected**
-- [ ] `alice chat` — *"Log $50 at the pharmacy, I paid"*
+```powershell
+git clone https://github.com/Canopix/hermes-expense-tracker.git $HOME\hermes-expense-tracker
+cd $HOME\hermes-expense-tracker
+.\install.ps1
+```
+
+The wizard asks for language, sets up the expense server + database, and creates Hermes profiles. **Then per member** (replace `alice` with your slug):
+
+| Step | Command | Expected |
+|------|---------|----------|
+| 1. Model + API key | `hermes -p alice setup` | Provider configured |
+| 2. Verify MCP | `hermes -p expense-alice mcp test expense-tracker` | 38 tools, ✓ Connected |
+| 3. Telegram bot | Create bot in [@BotFather](https://t.me/BotFather), then `alice gateway setup && alice gateway start` | Gateway running |
+| 4. Pairing | Message your bot → copy code → `hermes -p alice pairing approve telegram <CODE>` | Bot replies in chat |
+| 5. First expense | `alice chat` | *"Log $50 at the pharmacy, I paid"* |
+
+**Note:** `alice` is the **shortcut alias**. The Hermes profile name is `expense-alice`. Deleting a profile does **not** delete `~/.hermes/expense-tracker/expenses.db`.
 
 Spanish docs: [`docs/es/README.md`](docs/es/README.md)
 
@@ -33,6 +64,7 @@ Spanish docs: [`docs/es/README.md`](docs/es/README.md)
 
 ## Table of contents
 
+- [Before you start](#before-you-start)
 - [Quick start](#quick-start-hermes-already-installed)
 - [How it works](#how-it-works)
 - [Core concepts](#core-concepts)
@@ -56,7 +88,7 @@ Spanish docs: [`docs/es/README.md`](docs/es/README.md)
 1. **Member** — Alice, Bob, or CLI sends a message (Telegram or `alice chat`).
 2. **Hermes profile** — `expense-<slug>` loads SOUL + skills from `locales/`, calls only expense MCP tools.
 3. **MCP server** — Python FastMCP runs the tool (`add_expense`, `generate_report`, …).
-4. **Database** — reads or writes the shared file `~/expenses/data/expenses.db`.
+4. **Database** — reads or writes the shared file `~/.hermes/expense-tracker/expenses.db`.
 
 | From | To | How |
 |------|-----|-----|
@@ -69,7 +101,7 @@ Spanish docs: [`docs/es/README.md`](docs/es/README.md)
 | **Hermes profile** | Chat UI, model, Telegram gateway. Restricted to expense MCP only (`platform_toolsets: [mcp-expense-tracker]`). |
 | **SOUL + skills** | Domain guardrails, confirmation format, tool usage patterns. Copied from `locales/en/` or `locales/es/` on install. |
 | **MCP server** | CRUD, reports, charts, budgets, project visibility. Single source of truth. |
-| **SQLite DB** | Shared across all profiles. Path: `~/expenses/data/expenses.db`. |
+| **SQLite DB** | Shared across all profiles. Path: `~/.hermes/expense-tracker/expenses.db`. |
 
 **Important:** expense data never goes into Hermes `state.db` or `memories/`. Hermes memory is disabled in the template (`memory.memory_enabled: false`).
 
@@ -158,7 +190,7 @@ Everything below is done **by chatting** with your bot (or CLI). You never touch
 | You say | MCP does |
 |---------|----------|
 | *"Create project Wedding 2027"* | `create_project` (you become owner) |
-| *"Invite Johanna to vacation project"* | `add_project_member` |
+| *"Invite Bob to vacation project"* | `add_project_member` |
 | *"Expenses for home project"* | `project_summary` or filtered `list_expenses` |
 | *"Wedding project report"* | `generate_report(period="project", project="wedding")` |
 
@@ -203,8 +235,9 @@ During `./install.sh`, the wizard **always asks** for household language first (
 | Default category **names** | Seeded at first bootstrap in household locale (`shared/seed-categories-en.sql` / `-es.sql`) |
 | Category **slugs** | Same in all locales (`supermercado`, `transporte`, …) — stable MCP identifiers |
 
-- Locale is stored in `~/.expenses/locale` and in each profile `.env` as `EXPENSE_LOCALE`.
-- Manual install: `EXPENSE_LOCALE=en ./add-member.sh alice Alice`
+- Locale is stored in `~/.hermes/expense-tracker/locale` and in each profile `.env` as `EXPENSE_LOCALE`.
+- Database path is stored in `~/.hermes/expense-tracker/db-path` (default `~/.hermes/expense-tracker/expenses.db`). The install wizard lets you confirm or change it. Both paths honor `HERMES_HOME` when set.
+- Manual install: `EXPENSE_LOCALE=en EXPENSE_DB_PATH=~/.hermes/expense-tracker/expenses.db ./bootstrap.sh`
 - Existing installs without locale default to **Spanish** on `./update.sh` (legacy behavior).
 
 **Docs:** [`docs/en/`](docs/en/README.md) · [`docs/es/`](docs/es/README.md) · Technical briefing: [`docs/en/BRIEFING.md`](docs/en/BRIEFING.md)
@@ -226,35 +259,48 @@ During `./install.sh`, the wizard **always asks** for household language first (
 
 Terminal wizard with Rich panels: prerequisites, short prompts, no `pip` spam.
 
+**macOS / Linux / WSL:**
+
 ```bash
 git clone https://github.com/Canopix/hermes-expense-tracker.git ~/hermes-expense-tracker
 cd ~/hermes-expense-tracker
-chmod +x install.sh bootstrap.sh add-member.sh
+chmod +x install.sh bootstrap.sh add-member.sh update.sh
 ./install.sh
 ```
 
-The wizard asks:
+**Windows (PowerShell):**
 
-1. **Household language** — English or Español
-2. Bootstrap MCP + database (if needed)
-3. How many members get their own bot
-4. Display name + slug per member
-5. Optional people without a bot (expenses only)
-6. Optional default projects (home, vacation, health)
+```powershell
+git clone https://github.com/Canopix/hermes-expense-tracker.git $HOME\hermes-expense-tracker
+cd $HOME\hermes-expense-tracker
+.\install.ps1
+```
 
-> Paste into another AI with terminal access: [`docs/en/TO-INSTALL.md`](docs/en/TO-INSTALL.md) · [`docs/es/PARA-INSTALAR.md`](docs/es/PARA-INSTALAR.md)
+The wizard:
+
+1. Asks **household language** (English / Español)
+2. Shows the **shared database path** (default `~/.hermes/expense-tracker/expenses.db`) — press Enter to keep it or type another file/folder
+3. Checks Python + Hermes (with progress indicators)
+4. **First install:** sets up expense server + database at that path  
+5. **Existing database:** skips server setup, keeps your data, goes straight to members  
+6. Asks how many members get their own bot, name + slug per member
+7. Optional people without a bot, optional starter projects
+
+To refresh after `git pull`, use `./update.sh` or `.\update.ps1` on Windows — not the install wizard.
+
+> Hand off to another AI: [`docs/en/TO-INSTALL.md`](docs/en/TO-INSTALL.md) · [`docs/es/PARA-INSTALAR.md`](docs/es/PARA-INSTALAR.md)
 
 ### Option B — Manual
 
 ```bash
-./bootstrap.sh
+EXPENSE_LOCALE=en EXPENSE_DB_PATH=~/.hermes/expense-tracker/expenses.db ./bootstrap.sh
 EXPENSE_LOCALE=en ./add-member.sh alice Alice
 EXPENSE_LOCALE=en ./add-member.sh bob Bob
 ```
 
 | Script | What it does |
 |--------|--------------|
-| `bootstrap.sh` | MCP venv, schema, default categories, `.env.paths` |
+| `bootstrap.sh` | MCP Python venv + schema + default categories (uses `EXPENSE_LOCALE`, default `es`) |
 | `add-member.sh` | Person in DB + Hermes profile + SOUL/skills from `locales/${EXPENSE_LOCALE}/` |
 
 This product **does not** ask for API keys or Telegram tokens in `install.sh`. That is configured in Hermes per profile.
@@ -263,12 +309,24 @@ This product **does not** ask for API keys or Telegram tokens in `install.sh`. T
 
 ## After install — configure Hermes (per profile)
 
-`add-member.sh` prints the profile path (typically `~/.hermes/profiles/expense-<slug>/`). Commands use the short **alias** `<slug>`:
+`add-member.sh` creates `~/.hermes/profiles/expense-<slug>/` and a command alias `<slug>`:
 
 ```bash
 alice gateway          # same as hermes -p expense-alice gateway
-hermes -p alice chat   # explicit profile name
+hermes -p expense-alice chat   # full profile name also works
+hermes -p alice chat           # shortcut alias
 ```
+
+**Post-install order (each member):**
+
+| Step | Command | Notes |
+|------|---------|-------|
+| 1 | `hermes -p alice setup` | Model + API key |
+| 2 | `hermes -p expense-alice mcp test expense-tracker` | Must show 38 tools |
+| 3 | [@BotFather](https://t.me/BotFather) → new bot → `alice gateway setup` | Paste bot token |
+| 4 | `alice gateway start` | Keep gateway running |
+| 5 | Message bot in Telegram → `hermes -p alice pairing approve telegram <CODE>` | Code appears when you first message the bot |
+| 6 | `alice chat` | Try logging an expense |
 
 **What each layer configures:**
 
@@ -281,40 +339,6 @@ hermes -p alice chat   # explicit profile name
 | Telegram, gateway, pairing | `config.yaml` + gateway | `<slug> gateway setup` |
 | SOUL, skills, toolsets | Installed profile | Copied from `locales/` on install |
 
-### Telegram and startup
-
-```bash
-alice gateway setup
-alice gateway start
-hermes -p alice pairing approve telegram <CODE>
-```
-
-Verify MCP:
-
-```bash
-hermes -p alice mcp test expense-tracker
-# 38 tools, "✓ Connected"
-```
-
-Try:
-
-```bash
-alice chat
-# "Log $50 at the pharmacy, I paid" / "How much did we spend this month?"
-```
-
-Repeat model + Telegram setup for each member (`bob`, etc.).
-
-### Post-install checklist (each member)
-
-| Step | Command | Expected |
-|------|---------|----------|
-| Model configured | `hermes -p <slug> setup` | Provider + API key saved |
-| MCP connected | `hermes -p <slug> mcp test expense-tracker` | 38 tools, ✓ Connected |
-| Telegram gateway | `<slug> gateway setup && <slug> gateway start` | Gateway running |
-| Pairing | `hermes -p <slug> pairing approve telegram <CODE>` | Bot responds in chat |
-| Smoke test | `./scripts/smoke-test.sh expense-<slug>` | Expense logged + monthly query |
-
 ### Telegram UX (quiet)
 
 The `expense-member` template is configured for a clean chat:
@@ -326,7 +350,7 @@ The `expense-member` template is configured for a clean chat:
 | `telegram.reactions: true` | 👀 while processing, 👍 when done |
 | SOUL + skill | Structured confirmation (`Done ✅` + bullets), no tool narration |
 
-**Member slug:** short name only (`emanuel`, `johanna`). **Do not** use `expense-johanna` — `add-member.sh` adds the `expense-` prefix to the Hermes profile name.
+**Member slug:** short name only (`alice`, `bob`). **Do not** use `expense-alice` — `add-member.sh` adds the `expense-` prefix to the Hermes profile name.
 
 New installs inherit UX from the template. `add-member.sh` always re-personalizes SOUL (also after `profile update`).
 
@@ -454,9 +478,7 @@ All report tools accept filters: `category`, `project`, `paid_by`, `allocated_to
 | Person expenses-only | No | Ask the bot "create person X" |
 | Household projects | No | Ask the bot "create project vacation" |
 | Category budgets | No | Ask the bot or `set_category_budget` |
-| Update everything | No | `./update.sh` (MCP + skills + SOUL + Telegram UX) |
-| Misnamed profile | No | `./scripts/repair-profile.sh johanna Johanna expense-expense-johanna` |
-| Clean DB duplicates | No | `./scripts/cleanup-db.sh` |
+| Update everything | No | `./update.sh` or `.\update.ps1` (MCP + skills + SOUL) |
 
 **Never overwritten on updates:** `.env`, `memories/`, `sessions/`, `state.db`, `pairing/`.
 
@@ -468,8 +490,9 @@ All report tools accept filters: `category`, `project`, `paid_by`, `allocated_to
 |-----------|----------|
 | Repo (MCP + template) | `~/hermes-expense-tracker/` |
 | Hermes profiles (runtime) | `~/.hermes/profiles/expense-<slug>/` (commands: alias `<slug>`) |
-| Shared database | `~/expenses/data/expenses.db` |
-| Household locale | `~/expenses/locale` |
+| Shared database | `~/.hermes/expense-tracker/expenses.db` (override via wizard or `db-path`) |
+| Exports / charts | `~/.hermes/expense-tracker/exports/`, `charts/` (next to the DB file) |
+| Household locale | `~/.hermes/expense-tracker/locale` |
 | Localized agent copy | `~/hermes-expense-tracker/locales/{en,es}/` |
 | Profile config | `~/.hermes/profiles/expense-<slug>/config.yaml` |
 
@@ -482,10 +505,11 @@ hermes-expense-tracker/
 ├── README.md                 # this file (English, canonical)
 ├── LICENSE
 ├── CONTRIBUTING.md
-├── install.sh                # guided wizard → scripts/install_wizard.py
-├── bootstrap.sh              # MCP venv + DB schema + default categories
-├── add-member.sh             # DB person + Hermes profile + localized SOUL/skills
-├── update.sh                 # refresh MCP + all expense-* profiles
+├── install.sh                # guided wizard (Unix)
+├── install.ps1               # guided wizard (Windows)
+├── bootstrap.sh / bootstrap.ps1
+├── add-member.sh / add-member.ps1
+├── update.sh / update.ps1
 ├── locales/
 │   ├── en/                   # SOUL.md + skills/ (English agent)
 │   └── es/                   # SOUL.md + skills/ (Spanish agent)
@@ -494,10 +518,12 @@ hermes-expense-tracker/
 │   └── es/                   # README, BRIEFING, PARA-INSTALAR
 ├── scripts/
 │   ├── install_wizard.py     # Rich TUI installer
-│   ├── apply-telegram-ux.sh
-│   ├── repair-profile.sh
+│   ├── bootstrap.py          # CLI → expense_cli.bootstrap
+│   ├── add_member.py         # CLI → expense_cli.add_member
+│   ├── update.py             # CLI → expense_cli.update
+│   ├── expense_cli/          # cross-platform install logic (Python)
 │   ├── smoke-test.sh
-│   └── lib/locale.sh         # EXPENSE_LOCALE resolution
+│   └── lib/                  # legacy bash helpers (optional; logic lives in expense_cli/)
 ├── shared/seed-categories-en.sql
 ├── shared/seed-categories-es.sql
 ├── mcp/expense-tracker/
@@ -506,6 +532,7 @@ hermes-expense-tracker/
 │   └── expense_tracker/
 │       ├── repositories.py   # business logic + DB access
 │       ├── reports.py        # generate_report, render_chart, export
+│       ├── paths.py          # ~/.hermes/expense-tracker defaults
 │       └── i18n.py           # report/chart strings (en/es)
 └── profiles/
     └── expense-member/       # Hermes shell template (config, mcp.json — no full SOUL)
@@ -537,9 +564,8 @@ git pull                    # if using git
 1. Rebuilds MCP venv if needed
 2. Runs DB migrations (e.g. project membership)
 3. `hermes profile update` on each `expense-*` profile
-4. Re-applies SOUL/skills via `add-member.sh`
-5. Merges Telegram UX + `EXPENSE_MEMBER_SLUG` + `EXPENSE_LOCALE`
-6. Restarts gateways if running
+4. Re-applies SOUL/skills via `add-member`
+5. Restarts gateways if running
 
 After updating:
 
@@ -547,11 +573,14 @@ After updating:
 ./scripts/smoke-test.sh expense-alice
 ```
 
-Duplicate profile name (`expense-expense-johanna`):
+Duplicate profile name (`expense-expense-alice`): delete the bad profile, then recreate the member (DB is untouched):
 
 ```bash
-./scripts/repair-profile.sh johanna Johanna expense-expense-johanna
+hermes profile delete expense-expense-alice
+EXPENSE_LOCALE=en ./add-member.sh alice Alice
 ```
+
+Copy `config.yaml` / `.env` from the old folder manually if you need tokens or model settings before deleting.
 
 ---
 
@@ -559,13 +588,14 @@ Duplicate profile name (`expense-expense-johanna`):
 
 | Problem | Solution |
 |---------|----------|
-| MCP won't connect | `hermes -p <slug> mcp test expense-tracker`; check `EXPENSE_MCP_*` in profile `.env` |
+| MCP won't connect | `hermes -p expense-<slug> mcp test expense-tracker`; check `EXPENSE_*` in profile `.env` |
+| Deleted profile, want data back | DB at `~/.hermes/expense-tracker/expenses.db` is kept — run `EXPENSE_LOCALE=es ./add-member.sh <slug> <name>` |
 | Different expenses per profile | `EXPENSE_DB_PATH` must be **identical** in all profiles |
 | Telegram not responding | `<slug> gateway status`; check token and `allow_from` |
 | Pairing rejected | `hermes -p <slug> pairing approve telegram CODE` (use `-p`) |
 | Agent answers off-topic | Check `platform_toolsets: [mcp-expense-tracker]` in `config.yaml` |
 | Person missing when logging expense | `./add-member.sh` or `create_person` from the bot |
-| Profile `expense-expense-*` | `./scripts/repair-profile.sh <slug> <name> <old-profile>` |
+| Profile `expense-expense-*` | `hermes profile delete <bad-profile>` then `./add-member.sh <slug> <name>` (copy `.env` first if needed) |
 | SOUL still has `{{MEMBER_NAME}}` | `./add-member.sh <slug> <name>` or `./update.sh` |
 | Reports in wrong language | Set `EXPENSE_LOCALE=en` or `es` in profile `.env`, then `./update.sh` |
 | Project expenses invisible | Check project membership — caller must be owner or invited |
