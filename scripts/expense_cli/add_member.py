@@ -10,7 +10,16 @@ from pathlib import Path
 from .locale_util import resolve_expense_locale
 from .paths_util import resolve_expense_db_path, write_env_paths
 from .prereqs import require_prerequisites
-from .runtime import MCP_DIR, REPO_ROOT, TEMPLATE_DIR, mcp_env, run_hermes, venv_python
+from .runtime import (
+    MCP_DIR,
+    REPO_ROOT,
+    TEMPLATE_DIR,
+    env_path_value,
+    hermes_profiles_dir,
+    mcp_env,
+    run_hermes,
+    venv_python,
+)
 from .slug import normalize_member_slug, validate_member_slug
 
 
@@ -112,7 +121,7 @@ except repo.ValidationError as exc:
             print(alias.stderr or alias.stdout, file=sys.stderr)
             return alias.returncode
 
-    profile_dir = Path.home() / ".hermes" / "profiles" / profile_name
+    profile_dir = hermes_profiles_dir() / profile_name
     if not profile_dir.is_dir():
         print(f"Profile directory missing: {profile_dir}", file=sys.stderr)
         return 1
@@ -130,7 +139,6 @@ except repo.ValidationError as exc:
 
     env_file = profile_dir / ".env"
     env_file.touch(exist_ok=True)
-    from .runtime import MCP_DIR, env_path_value, venv_python
 
     _upsert_env_var(env_file, "EXPENSE_DB_PATH", env_path_value(db_path))
     _upsert_env_var(env_file, "EXPENSE_MCP_PYTHON", env_path_value(venv_python()))
