@@ -516,6 +516,39 @@ class RecurringRepoTests(unittest.TestCase):
         repo.update_recurring_expense(rec["id"], is_active=False)
         self.assertEqual(repo.list_due_recurring(today="2026-06-15"), [])
 
+    def test_generate_fixed_uses_suggested_amount_and_advances_due(self) -> None:
+        rec = self._make_rent(start_date="2026-01-05", suggested_amount=100000)
+        result = repo.generate_recurring_expense(rec["id"])
+        self.assertEqual(result["expense"]["amount"], 100000)
+        self.assertEqual(result["expense"]["expense_date"], "2026-01-05")
+        self.assertEqual(result["expense"]["recurring_id"], rec["id"])
+        # next_due advanced one month
+        self.assertEqual(result["recurring"]["next_due_date"], "2026-02-05")
+        self.assertEqual(result["recurring"]["last_generated_date"], "2026-01-05")
+
+    def test_generate_variable_requires_amount(self) -> None:
+        rec = self._make_rent(suggested_amount=None)
+        with self.assertRaises(repo.ValidationError):
+            repo.generate_recurring_expense(rec["id"])
+        result = repo.generate_recurring_expense(rec["id"], amount=54321)
+        self.assertEqual(result["expense"]["amount"], 54321)
+
+    def test_generate_is_idempotent_for_same_period(self) -> None:
+        rec = self._make_rent(start_date="2026-01-05", suggested_amount=100000)
+        repo.generate_recurring_expense(rec["id"], expense_date="2026-01-05")
+        with self.assertRaises(repo.ValidationError):
+            repo.generate_recurring_expense(rec["id"], expense_date="2026-01-05")
+
+    def test_generate_copies_allocations(self) -> None:
+        rec = self._make_rent(
+            allocations=[
+                {"person": "alice", "percentage": 60},
+                {"person": "bob", "percentage": 40},
+            ],
+        )
+        result = repo.generate_recurring_expense(rec["id"])
+        self.assertEqual(len(result["expense"]["allocations"]), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

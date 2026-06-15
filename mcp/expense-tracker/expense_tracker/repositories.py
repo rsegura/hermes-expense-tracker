@@ -2190,7 +2190,8 @@ def update_recurring_expense(
 
 
 def list_due_recurring(today: str | None = None) -> list[dict[str, Any]]:
-    today = today or _today_str()
+    if today is None:
+        today = _today_str()
     datetime.strptime(today, "%Y-%m-%d")
     with connect() as conn:
         rows = conn.execute(
@@ -2198,6 +2199,89 @@ def list_due_recurring(today: str | None = None) -> list[dict[str, Any]]:
             (today,),
         ).fetchall()
         return [_recurring_with_relations(conn, r["id"]) for r in rows]
+
+
+def generate_recurring_expense(
+    recurring_id: int,
+    amount: float | None = None,
+    expense_date: str | None = None,
+) -> dict[str, Any]:
+    with connect() as conn:
+        rec = conn.execute(
+            "SELECT * FROM recurring_expenses WHERE id = ?", (recurring_id,)
+        ).fetchone()
+        if rec is None:
+            raise NotFoundError(f"Recurring expense not found: {recurring_id}")
+        if not rec["is_active"]:
+            raise ValidationError("Recurring template is inactive")
+
+        occurrence_date = expense_date or rec["next_due_date"]
+        datetime.strptime(occurrence_date, "%Y-%m-%d")
+
+        # Idempotency: never create two expenses for the same template+date.
+        existing = conn.execute(
+            "SELECT 1 FROM expenses WHERE recurring_id = ? AND expense_date = ?",
+            (recurring_id, occurrence_date),
+        ).fetchone()
+        if existing is not None:
+            raise ValidationError(
+                f"An expense for this recurring template already exists on {occurrence_date}"
+            )
+
+        if amount is None:
+            if rec["suggested_amount"] is None:
+                raise ValidationError("amount is required for a variable recurring expense")
+            final_amount = float(rec["suggested_amount"])
+        else:
+            if amount < 0:
+                raise ValidationError("Amount must be >= 0")
+            final_amount = float(amount)
+
+        cur = conn.execute(
+            """
+            INSERT INTO expenses (
+                expense_date, description, amount, currency, category_id,
+                project_id, paid_by_person_id, notes, recurring_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                occurrence_date,
+                rec["description"],
+                final_amount,
+                rec["currency"],
+                rec["category_id"],
+                rec["project_id"],
+                rec["paid_by_person_id"],
+                rec["notes"],
+                recurring_id,
+            ),
+        )
+        expense_id = cur.lastrowid
+        alloc_rows = conn.execute(
+            "SELECT person_id, percentage FROM recurring_allocations WHERE recurring_id = ?",
+            (recurring_id,),
+        ).fetchall()
+        for a in alloc_rows:
+            conn.execute(
+                "INSERT INTO expense_allocations (expense_id, person_id, percentage) VALUES (?, ?, ?)",
+                (expense_id, a["person_id"], a["percentage"]),
+            )
+
+        # Advance the schedule only when we generated the current due occurrence.
+        if occurrence_date >= rec["next_due_date"]:
+            new_due = _advance_due_date(
+                rec["next_due_date"], rec["frequency"], rec["interval"],
+                rec["anchor_day"], rec["anchor_month"],
+            )
+            conn.execute(
+                "UPDATE recurring_expenses SET next_due_date = ?, last_generated_date = ?, updated_at = datetime('now') WHERE id = ?",
+                (new_due, occurrence_date, recurring_id),
+            )
+        conn.commit()
+        return {
+            "expense": _expense_with_relations(conn, expense_id),
+            "recurring": _recurring_with_relations(conn, recurring_id),
+        }
 
 
 def delete_recurring_expense(recurring_id: int) -> dict[str, Any]:
