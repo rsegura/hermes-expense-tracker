@@ -2189,6 +2189,17 @@ def update_recurring_expense(
         return _recurring_with_relations(conn, recurring_id)
 
 
+def list_due_recurring(today: str | None = None) -> list[dict[str, Any]]:
+    today = today or _today_str()
+    datetime.strptime(today, "%Y-%m-%d")
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT id FROM recurring_expenses WHERE is_active = 1 AND next_due_date <= ? ORDER BY next_due_date, id",
+            (today,),
+        ).fetchall()
+        return [_recurring_with_relations(conn, r["id"]) for r in rows]
+
+
 def delete_recurring_expense(recurring_id: int) -> dict[str, Any]:
     with connect() as conn:
         row = conn.execute("SELECT id FROM recurring_expenses WHERE id = ?", (recurring_id,)).fetchone()

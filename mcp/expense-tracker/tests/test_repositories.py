@@ -502,6 +502,20 @@ class RecurringRepoTests(unittest.TestCase):
         with self.assertRaises(repo.NotFoundError):
             repo.delete_recurring_expense(99999)
 
+    def test_list_due_returns_only_active_and_due(self) -> None:
+        # Due: start in the past
+        self._make_rent(start_date="2020-01-05")
+        # Not due: start in the far future
+        self._make_rent(description="Future", start_date="2999-01-05")
+        due = repo.list_due_recurring(today="2026-06-15")
+        self.assertEqual(len(due), 1)
+        self.assertEqual(due[0]["description"], "Alquiler")
+
+    def test_list_due_excludes_inactive(self) -> None:
+        rec = self._make_rent(start_date="2020-01-05")
+        repo.update_recurring_expense(rec["id"], is_active=False)
+        self.assertEqual(repo.list_due_recurring(today="2026-06-15"), [])
+
 
 if __name__ == "__main__":
     unittest.main()
