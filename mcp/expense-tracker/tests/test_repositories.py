@@ -549,6 +549,34 @@ class RecurringRepoTests(unittest.TestCase):
         result = repo.generate_recurring_expense(rec["id"])
         self.assertEqual(len(result["expense"]["allocations"]), 2)
 
+    def test_generate_backfill_past_date_records_generation_without_advancing(self) -> None:
+        rec = self._make_rent(start_date="2026-03-05", suggested_amount=100000)
+        repo.generate_recurring_expense(rec["id"])  # generates March, advances to April
+        result = repo.generate_recurring_expense(rec["id"], expense_date="2026-02-05")
+        self.assertEqual(result["expense"]["expense_date"], "2026-02-05")
+        # schedule NOT advanced by the backfill
+        self.assertEqual(result["recurring"]["next_due_date"], "2026-04-05")
+        # but the generation is still recorded
+        self.assertEqual(result["recurring"]["last_generated_date"], "2026-02-05")
+
+    def test_duplicate_recurring_period_blocked_at_db_level(self) -> None:
+        import sqlite3
+        from expense_tracker.db import connect
+        rec = self._make_rent(start_date="2026-01-05", suggested_amount=100000)
+        repo.generate_recurring_expense(rec["id"], expense_date="2026-01-05")
+        with self.assertRaises(sqlite3.IntegrityError):
+            with connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO expenses
+                        (expense_date, description, amount, currency, category_id, paid_by_person_id, recurring_id)
+                    SELECT '2026-01-05', 'dup', 1, 'ARS', category_id, paid_by_person_id, id
+                    FROM recurring_expenses WHERE id = ?
+                    """,
+                    (rec["id"],),
+                )
+                conn.commit()
+
 
 if __name__ == "__main__":
     unittest.main()

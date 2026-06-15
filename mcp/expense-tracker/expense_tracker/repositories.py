@@ -5,6 +5,7 @@ import io
 import json
 import os
 import re
+import sqlite3
 import calendar
 from datetime import date, datetime, timedelta
 from typing import Any, Literal
@@ -2237,25 +2238,30 @@ def generate_recurring_expense(
                 raise ValidationError("Amount must be >= 0")
             final_amount = float(amount)
 
-        cur = conn.execute(
-            """
-            INSERT INTO expenses (
-                expense_date, description, amount, currency, category_id,
-                project_id, paid_by_person_id, notes, recurring_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                occurrence_date,
-                rec["description"],
-                final_amount,
-                rec["currency"],
-                rec["category_id"],
-                rec["project_id"],
-                rec["paid_by_person_id"],
-                rec["notes"],
-                recurring_id,
-            ),
-        )
+        try:
+            cur = conn.execute(
+                """
+                INSERT INTO expenses (
+                    expense_date, description, amount, currency, category_id,
+                    project_id, paid_by_person_id, notes, recurring_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    occurrence_date,
+                    rec["description"],
+                    final_amount,
+                    rec["currency"],
+                    rec["category_id"],
+                    rec["project_id"],
+                    rec["paid_by_person_id"],
+                    rec["notes"],
+                    recurring_id,
+                ),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise ValidationError(
+                f"An expense for this recurring template already exists on {occurrence_date}"
+            ) from exc
         expense_id = cur.lastrowid
         alloc_rows = conn.execute(
             "SELECT person_id, percentage FROM recurring_allocations WHERE recurring_id = ?",
@@ -2267,15 +2273,20 @@ def generate_recurring_expense(
                 (expense_id, a["person_id"], a["percentage"]),
             )
 
-        # Advance the schedule only when we generated the current due occurrence.
+        # Always record that an occurrence was generated for this date.
+        conn.execute(
+            "UPDATE recurring_expenses SET last_generated_date = ?, updated_at = datetime('now') WHERE id = ?",
+            (occurrence_date, recurring_id),
+        )
+        # Advance the schedule only when generating the current (not a backfilled past) occurrence.
         if occurrence_date >= rec["next_due_date"]:
             new_due = _advance_due_date(
                 rec["next_due_date"], rec["frequency"], rec["interval"],
                 rec["anchor_day"], rec["anchor_month"],
             )
             conn.execute(
-                "UPDATE recurring_expenses SET next_due_date = ?, last_generated_date = ?, updated_at = datetime('now') WHERE id = ?",
-                (new_due, occurrence_date, recurring_id),
+                "UPDATE recurring_expenses SET next_due_date = ? WHERE id = ?",
+                (new_due, recurring_id),
             )
         conn.commit()
         return {

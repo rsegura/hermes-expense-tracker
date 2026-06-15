@@ -136,4 +136,9 @@ def run_migrations() -> None:
                 "CREATE INDEX IF NOT EXISTS idx_expenses_recurring ON expenses(recurring_id)",
             )
 
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_expenses_recurring_period "
+            "ON expenses(recurring_id, expense_date) WHERE recurring_id IS NOT NULL"
+        )
+
         conn.commit()
