@@ -131,6 +131,25 @@ class RecurringSchemaMigrationTests(unittest.TestCase):
             cols = {r["name"] for r in conn.execute("PRAGMA table_info(expenses)").fetchall()}
             self.assertIn("recurring_id", cols)
 
+    def test_migration_recreates_recurring_objects_on_existing_db(self) -> None:
+        from expense_tracker.db import connect
+        from expense_tracker.migrations import run_migrations
+        # Simulate an older DB that predates the recurring feature.
+        with connect() as conn:
+            conn.execute("DROP TABLE recurring_allocations")
+            conn.execute("DROP TABLE recurring_expenses")
+            conn.commit()
+        run_migrations()
+        with connect() as conn:
+            tables = {
+                r["name"]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+            self.assertIn("recurring_expenses", tables)
+            self.assertIn("recurring_allocations", tables)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -132,5 +132,8 @@ def run_migrations() -> None:
             conn.execute(
                 "ALTER TABLE expenses ADD COLUMN recurring_id INTEGER REFERENCES recurring_expenses(id)",
             )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_expenses_recurring ON expenses(recurring_id)",
+            )
 
         conn.commit()
