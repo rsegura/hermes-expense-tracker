@@ -416,6 +416,7 @@ class RecurringRepoTests(unittest.TestCase):
         self.assertEqual(rec["frequency"], "monthly")
         self.assertEqual(rec["interval"], 1)
         self.assertEqual(rec["anchor_day"], 5)
+        self.assertEqual(rec["anchor_month"], 1)  # start_date is 2026-01-05
         self.assertEqual(len(rec["allocations"]), 1)
         self.assertEqual(rec["allocations"][0]["person_slug"], "alice")
         self.assertAlmostEqual(rec["allocations"][0]["percentage"], 100.0)
@@ -438,7 +439,13 @@ class RecurringRepoTests(unittest.TestCase):
         self._make_rent(description="Netflix", suggested_amount=5000)
         items = repo.list_recurring_expenses()
         self.assertEqual(len(items), 2)
-        self.assertTrue(all("next_due_date" in it for it in items))
+        for it in items:
+            self.assertIn("next_due_date", it)
+            self.assertIsInstance(it["allocations"], list)
+            self.assertGreater(len(it["allocations"]), 0)
+        # Both have the same start_date, so ordering falls back to id (insertion order)
+        self.assertEqual(items[0]["description"], "Alquiler")
+        self.assertEqual(items[1]["description"], "Netflix")
 
 
 if __name__ == "__main__":
