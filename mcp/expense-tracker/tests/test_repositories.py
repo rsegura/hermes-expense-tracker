@@ -376,6 +376,17 @@ class RecurringDateMathTests(unittest.TestCase):
             "2025-02-28",
         )
 
+    def test_unknown_frequency_raises(self) -> None:
+        with self.assertRaises(repo.ValidationError):
+            repo._advance_due_date("2026-01-01", "daily", 1, None, None)
+
+    def test_monthly_advance_multi_interval_clamps(self) -> None:
+        # Jan 31 + 3 months -> April 30 (April has 30 days), anchor day 31 preserved
+        self.assertEqual(
+            repo._advance_due_date("2026-01-31", "monthly", 3, 31, None),
+            "2026-04-30",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

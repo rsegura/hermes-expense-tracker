@@ -268,13 +268,13 @@ def _advance_due_date(
         month_index = (d.month - 1) + interval
         year = d.year + month_index // 12
         month = month_index % 12 + 1
-        day = anchor_day or d.day
+        day = d.day if anchor_day is None else anchor_day
         last = calendar.monthrange(year, month)[1]
         return date(year, month, min(day, last)).isoformat()
     if frequency == "yearly":
         year = d.year + interval
-        month = anchor_month or d.month
-        day = anchor_day or d.day
+        month = d.month if anchor_month is None else anchor_month
+        day = d.day if anchor_day is None else anchor_day
         last = calendar.monthrange(year, month)[1]
         return date(year, month, min(day, last)).isoformat()
     raise ValidationError(f"Unknown frequency: {frequency}")
