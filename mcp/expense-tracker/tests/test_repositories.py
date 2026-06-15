@@ -388,5 +388,58 @@ class RecurringDateMathTests(unittest.TestCase):
         )
 
 
+class RecurringRepoTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db_path = Path(self.tmp.name) / "test.db"
+        os.environ["EXPENSE_DB_PATH"] = str(self.db_path)
+        init_db(seed="test")
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _make_rent(self, **overrides):
+        params = dict(
+            description="Alquiler",
+            category="comida",
+            paid_by="alice",
+            frequency="monthly",
+            start_date="2026-01-05",
+            suggested_amount=100000,
+        )
+        params.update(overrides)
+        return repo.create_recurring_expense(**params)
+
+    def test_create_sets_next_due_to_start_and_default_allocation(self) -> None:
+        rec = self._make_rent()
+        self.assertEqual(rec["next_due_date"], "2026-01-05")
+        self.assertEqual(rec["frequency"], "monthly")
+        self.assertEqual(rec["interval"], 1)
+        self.assertEqual(rec["anchor_day"], 5)
+        self.assertEqual(len(rec["allocations"]), 1)
+        self.assertEqual(rec["allocations"][0]["person_slug"], "alice")
+        self.assertAlmostEqual(rec["allocations"][0]["percentage"], 100.0)
+
+    def test_create_with_split_allocations(self) -> None:
+        rec = self._make_rent(
+            allocations=[
+                {"person": "alice", "percentage": 60},
+                {"person": "bob", "percentage": 40},
+            ],
+        )
+        self.assertEqual(len(rec["allocations"]), 2)
+
+    def test_create_rejects_bad_frequency(self) -> None:
+        with self.assertRaises(repo.ValidationError):
+            self._make_rent(frequency="daily")
+
+    def test_list_returns_created_templates(self) -> None:
+        self._make_rent()
+        self._make_rent(description="Netflix", suggested_amount=5000)
+        items = repo.list_recurring_expenses()
+        self.assertEqual(len(items), 2)
+        self.assertTrue(all("next_due_date" in it for it in items))
+
+
 if __name__ == "__main__":
     unittest.main()
