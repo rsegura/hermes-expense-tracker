@@ -447,6 +447,53 @@ class RecurringRepoTests(unittest.TestCase):
         self.assertEqual(items[0]["description"], "Alquiler")
         self.assertEqual(items[1]["description"], "Netflix")
 
+    def test_update_changes_fields_and_recomputes_due_on_cadence_change(self) -> None:
+        rec = self._make_rent()
+        updated = repo.update_recurring_expense(
+            rec["id"], suggested_amount=120000, frequency="yearly", anchor_month=1, anchor_day=5
+        )
+        self.assertEqual(updated["suggested_amount"], 120000)
+        self.assertEqual(updated["frequency"], "yearly")
+        # next_due_date recomputed from start_date with new cadence anchor
+        self.assertEqual(updated["next_due_date"], "2026-01-05")
+
+    def test_update_replaces_allocations(self) -> None:
+        rec = self._make_rent()
+        updated = repo.update_recurring_expense(
+            rec["id"],
+            allocations=[
+                {"person": "alice", "percentage": 30},
+                {"person": "bob", "percentage": 70},
+            ],
+        )
+        self.assertEqual(len(updated["allocations"]), 2)
+
+    def test_delete_deactivates_when_referenced(self) -> None:
+        from expense_tracker.db import connect
+        rec = self._make_rent()
+        # Simulate a generated expense referencing this template (via raw SQL).
+        with connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO expenses
+                    (expense_date, description, amount, currency, category_id, paid_by_person_id, recurring_id)
+                SELECT '2026-01-05', 'Alquiler', 100000, 'ARS', category_id, paid_by_person_id, id
+                FROM recurring_expenses WHERE id = ?
+                """,
+                (rec["id"],),
+            )
+            conn.commit()
+        result = repo.delete_recurring_expense(rec["id"])
+        self.assertFalse(result["hard_deleted"])
+        items = repo.list_recurring_expenses()
+        self.assertEqual(items[0]["is_active"], 0)
+
+    def test_delete_hard_when_unreferenced(self) -> None:
+        rec = self._make_rent()
+        result = repo.delete_recurring_expense(rec["id"])
+        self.assertTrue(result["hard_deleted"])
+        self.assertEqual(repo.list_recurring_expenses(), [])
+
 
 if __name__ == "__main__":
     unittest.main()
