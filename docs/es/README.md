@@ -51,7 +51,7 @@ Luego **por cada miembro** (reemplazá `alice` por tu slug):
 | Paso | Comando | Esperado |
 |------|---------|----------|
 | 1. Modelo + API key | `hermes -p alice setup` | Provider configurado |
-| 2. Verificar MCP | `hermes -p expense-alice mcp test expense-tracker` | 38 tools, ✓ Connected |
+| 2. Verificar MCP | `hermes -p expense-alice mcp test expense-tracker` | 44 tools, ✓ Connected |
 | 3. Bot Telegram | Crear bot en [@BotFather](https://t.me/BotFather), luego `alice gateway setup && alice gateway start` | Gateway corriendo |
 | 4. Pairing | Escribile al bot → copiá el código → `hermes -p alice pairing approve telegram <CODIGO>` | Bot responde |
 | 5. Primer gasto | `alice chat` | *"Registrá $5000 en farmacia, pagué yo"* |
@@ -162,7 +162,7 @@ Verificar MCP:
 
 ```bash
 hermes -p alice mcp test expense-tracker
-# 38 tools, "✓ Connected"
+# 44 tools, "✓ Connected"
 ```
 
 Probar:
@@ -179,7 +179,7 @@ Repetir secrets + Telegram para cada miembro (`bob`, etc.).
 | Paso | Comando | Notas |
 |------|---------|-------|
 | 1 | `hermes -p alice setup` | Modelo + API key |
-| 2 | `hermes -p expense-alice mcp test expense-tracker` | 38 tools |
+| 2 | `hermes -p expense-alice mcp test expense-tracker` | 44 tools |
 | 3 | [@BotFather](https://t.me/BotFather) → `alice gateway setup` | Pegar token del bot |
 | 4 | `alice gateway start` | Gateway corriendo |
 | 5 | Escribir al bot → `hermes -p alice pairing approve telegram <CODIGO>` | El código aparece al primer mensaje |
@@ -286,7 +286,7 @@ hermes-expense-tracker/
 ├── shared/seed-categories-en.sql
 ├── shared/seed-categories-es.sql
 ├── mcp/expense-tracker/
-│   ├── server.py             # 38 tools FastMCP
+│   ├── server.py             # 44 tools FastMCP
 │   ├── manifest.yaml
 │   └── expense_tracker/
 │       └── i18n.py           # strings de reportes (en/es)
@@ -298,7 +298,7 @@ hermes-expense-tracker/
 
 ## MCP tools
 
-38 tools. Prefijo en Hermes: `mcp_expense_tracker_<tool>`.
+44 tools. Prefijo en Hermes: `mcp_expense_tracker_<tool>`.
 
 | Grupo | Tools |
 |-------|-------|
@@ -309,6 +309,7 @@ hermes-expense-tracker/
 | Reportes | `monthly_summary`, `yearly_summary`, `project_summary`, `category_summary`, `person_summary` |
 | Comparación / export | `compare_months`, `compare_periods`, `top_expenses`, `export_expenses`, `export_expenses_file` |
 | Reportes / gráficos | `generate_report`, `render_chart` (PNG: categorías, proyectos, tendencia, top gastos) |
+| Gastos recurrentes | `create_recurring_expense`, `update_recurring_expense`, `delete_recurring_expense`, `list_recurring_expenses`, `list_due_recurring`, `generate_recurring_expense` |
 | Presupuestos | `set_category_budget`, `update_category_budget`, `delete_category_budget`, `list_category_budgets`, `budget_status` |
 | Utilidad | `health_check` |
 

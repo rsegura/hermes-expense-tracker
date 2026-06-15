@@ -72,7 +72,7 @@ Proyectos tienen **membresía por persona** (`project_members`). Cada perfil MCP
 
 ---
 
-## MCP — 38 tools
+## MCP — 44 tools
 
 Prefijo: `mcp_expense_tracker_<tool>`
 
@@ -91,6 +91,14 @@ Comparación: `compare_months`, `compare_periods`. Top gastos: `top_expenses`. E
 Presupuestos mensuales por categoría: `set_category_budget`, `budget_status` (alertas al superar umbral).
 
 `add_expense`: allocations por slug; si no hay → 100% al pagador.
+
+### Gastos recurrentes (6 tools nuevos)
+
+Templates en tablas `recurring_expenses` + `recurring_allocations`. Cadencia: `weekly` / `monthly` / `yearly`. La generación es **lazy y bajo demanda** — no hay scheduler en background. Cada llamada a `generate_recurring_expense` crea un gasto real y avanza `next_due_date` un período. `list_due_recurring` devuelve templates con `next_due_date <= hoy`. Borrar un template lo desactiva si ya generó gastos; de lo contrario hard-delete.
+
+### Captura de recibos (fotos)
+
+El modelo multimodal del agente lee fotos de tickets directamente en el chat (monto, fecha, comercio, categoría) y llama a `add_expense` tras confirmación. **Sin almacenamiento backend** — la imagen nunca se escribe en disco ni en la base de datos; solo se persiste el gasto resultante. Requiere un modelo con capacidades visuales (multimodal) en el perfil.
 
 ---
 
