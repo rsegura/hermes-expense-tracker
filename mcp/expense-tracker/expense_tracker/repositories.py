@@ -5,7 +5,8 @@ import io
 import json
 import os
 import re
-from datetime import datetime, timedelta
+import calendar
+from datetime import date, datetime, timedelta
 from typing import Any, Literal
 
 from .db import connect, init_db, row_to_dict, rows_to_dicts
@@ -243,6 +244,40 @@ def _validate_allocations(allocations: list[dict[str, Any]]) -> list[dict[str, A
     if abs(total - 100.0) > 0.01:
         raise ValidationError(f"Allocations must sum to 100, got {total}")
     return normalized
+
+
+_FREQUENCIES = ("weekly", "monthly", "yearly")
+
+
+def _today_str() -> str:
+    return date.today().isoformat()
+
+
+def _advance_due_date(
+    due: str,
+    frequency: str,
+    interval: int,
+    anchor_day: int | None,
+    anchor_month: int | None,
+) -> str:
+    """Advance an ISO date by interval x frequency, preserving the anchor day."""
+    d = date.fromisoformat(due)
+    if frequency == "weekly":
+        return (d + timedelta(days=7 * interval)).isoformat()
+    if frequency == "monthly":
+        month_index = (d.month - 1) + interval
+        year = d.year + month_index // 12
+        month = month_index % 12 + 1
+        day = anchor_day or d.day
+        last = calendar.monthrange(year, month)[1]
+        return date(year, month, min(day, last)).isoformat()
+    if frequency == "yearly":
+        year = d.year + interval
+        month = anchor_month or d.month
+        day = anchor_day or d.day
+        last = calendar.monthrange(year, month)[1]
+        return date(year, month, min(day, last)).isoformat()
+    raise ValidationError(f"Unknown frequency: {frequency}")
 
 
 def create_person(

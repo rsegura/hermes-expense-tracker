@@ -348,5 +348,34 @@ class ProjectMembershipTests(unittest.TestCase):
             repo.create_project("No caller")
 
 
+class RecurringDateMathTests(unittest.TestCase):
+    def test_weekly_advance(self) -> None:
+        self.assertEqual(
+            repo._advance_due_date("2026-06-01", "weekly", 2, None, None),
+            "2026-06-15",
+        )
+
+    def test_monthly_advance_clamps_end_of_month(self) -> None:
+        # Jan 31 + 1 month -> Feb 28 (2026 is not a leap year)
+        self.assertEqual(
+            repo._advance_due_date("2026-01-31", "monthly", 1, 31, None),
+            "2026-02-28",
+        )
+
+    def test_monthly_advance_preserves_anchor_after_clamp(self) -> None:
+        # From the clamped Feb 28, next month should return to day 31 (March)
+        self.assertEqual(
+            repo._advance_due_date("2026-02-28", "monthly", 1, 31, None),
+            "2026-03-31",
+        )
+
+    def test_yearly_advance_honors_anchor_month_and_day(self) -> None:
+        # Feb 29 (leap) + 1 year -> Feb 28 (2025 not a leap year), anchor day clamped
+        self.assertEqual(
+            repo._advance_due_date("2024-02-29", "yearly", 1, 29, 2),
+            "2025-02-28",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
