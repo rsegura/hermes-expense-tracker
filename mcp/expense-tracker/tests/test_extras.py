@@ -107,5 +107,30 @@ class ExtraFeaturesTests(unittest.TestCase):
         self.assertTrue(json.loads(raw)["ok"])
 
 
+class RecurringSchemaMigrationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db_path = Path(self.tmp.name) / "test.db"
+        os.environ["EXPENSE_DB_PATH"] = str(self.db_path)
+        init_db(seed="test")
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_recurring_tables_and_provenance_column_exist(self) -> None:
+        from expense_tracker.db import connect
+        with connect() as conn:
+            tables = {
+                r["name"]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+            self.assertIn("recurring_expenses", tables)
+            self.assertIn("recurring_allocations", tables)
+            cols = {r["name"] for r in conn.execute("PRAGMA table_info(expenses)").fetchall()}
+            self.assertIn("recurring_id", cols)
+
+
 if __name__ == "__main__":
     unittest.main()
