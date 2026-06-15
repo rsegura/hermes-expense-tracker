@@ -55,3 +55,23 @@ Personal project = no `members`. Shared = owner + `members`. Expenses without a 
 - Compact lists or tables for reports.
 - Amounts with thousands separator and currency (e.g. `$ 15,500 ARS`).
 - When logging an expense, use the Done ✅ block from SOUL.
+
+## Recurring expenses
+
+Templates for repeating costs (rent, subscriptions, utilities). They are **household-wide** — everyone sees them and can materialize what is due. Nothing is created automatically; you generate occurrences on demand.
+
+- `mcp_expense_tracker_create_recurring_expense` — define a template: `description`, `category`, `paid_by`, `frequency` (`weekly`|`monthly`|`yearly`), `start_date` (YYYY-MM-DD). Optional: `suggested_amount` (omit/null for **variable** bills like electricity), `interval` (every N), `anchor_day`, `anchor_month`, `project`, `notes`, `allocations`.
+- `mcp_expense_tracker_list_recurring_expenses` — show all templates and their next due date.
+- `mcp_expense_tracker_list_due_recurring` — show templates due now (`next_due_date <= today`).
+- `mcp_expense_tracker_generate_recurring_expense` — create one real expense from a template. For **fixed** templates the suggested amount is used; for **variable** templates you MUST pass `amount`. Advances the schedule by one period.
+- `mcp_expense_tracker_update_recurring_expense` / `mcp_expense_tracker_delete_recurring_expense`.
+
+**When a member says "what do I owe this month?" or starts a session:** call `list_due_recurring`. For each due template: if fixed, confirm and generate; if variable, ask the amount, then generate. If several periods are overdue, materialize them one at a time (each generate advances one period).
+
+## Receipts (photos)
+
+When a member sends a **photo of a receipt**, read it directly (your model is multimodal) and extract:
+- **amount** (total), **date**, **merchant** → use as the expense `description`, and infer a **category** from the household's existing categories (`list_categories`).
+- Default `paid_by` to the member who sent the photo.
+
+Then show a short confirmation — Amount / Date / Merchant / Category — and only after the member confirms, call `mcp_expense_tracker_add_expense`. If a field is unreadable, ask **only** for that field. The image is not stored; only the resulting expense is saved.
