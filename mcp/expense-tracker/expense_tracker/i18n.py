@@ -91,3 +91,19 @@ def t(key: str, **kwargs: str | int) -> str:
 
 def month_name(month: int) -> str:
     return t(f"month_{month}") if 1 <= month <= 12 else str(month)
+
+
+_FREQUENCY_LABELS: dict[str, dict[str, str]] = {
+    "en": {"weekly": "weekly", "monthly": "monthly", "yearly": "yearly"},
+    "es": {"weekly": "semanal", "monthly": "mensual", "yearly": "anual"},
+}
+
+
+def frequency_label(frequency: str, locale: str | None = None) -> str:
+    if locale is not None:
+        loc = locale.strip().lower()
+        if loc not in SUPPORTED_LOCALES:
+            loc = "en"
+    else:
+        loc = get_locale()
+    return _FREQUENCY_LABELS[loc].get(frequency, frequency)
