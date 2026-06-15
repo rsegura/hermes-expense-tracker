@@ -494,6 +494,14 @@ class RecurringRepoTests(unittest.TestCase):
         self.assertTrue(result["hard_deleted"])
         self.assertEqual(repo.list_recurring_expenses(), [])
 
+    def test_update_nonexistent_raises(self) -> None:
+        with self.assertRaises(repo.NotFoundError):
+            repo.update_recurring_expense(99999, description="Ghost")
+
+    def test_delete_nonexistent_raises(self) -> None:
+        with self.assertRaises(repo.NotFoundError):
+            repo.delete_recurring_expense(99999)
+
 
 if __name__ == "__main__":
     unittest.main()
