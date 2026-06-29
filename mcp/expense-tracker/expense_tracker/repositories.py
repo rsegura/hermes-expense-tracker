@@ -5,7 +5,9 @@ import io
 import json
 import os
 import re
-from datetime import datetime, timedelta
+import sqlite3
+import calendar
+from datetime import date, datetime, timedelta
 from typing import Any, Literal
 
 from .currency import default_currency
@@ -244,6 +246,40 @@ def _validate_allocations(allocations: list[dict[str, Any]]) -> list[dict[str, A
     if abs(total - 100.0) > 0.01:
         raise ValidationError(f"Allocations must sum to 100, got {total}")
     return normalized
+
+
+_FREQUENCIES = ("weekly", "monthly", "yearly")
+
+
+def _today_str() -> str:
+    return date.today().isoformat()
+
+
+def _advance_due_date(
+    due: str,
+    frequency: str,
+    interval: int,
+    anchor_day: int | None,
+    anchor_month: int | None,
+) -> str:
+    """Advance an ISO date by interval x frequency, preserving the anchor day."""
+    d = date.fromisoformat(due)
+    if frequency == "weekly":
+        return (d + timedelta(days=7 * interval)).isoformat()
+    if frequency == "monthly":
+        month_index = (d.month - 1) + interval
+        year = d.year + month_index // 12
+        month = month_index % 12 + 1
+        day = d.day if anchor_day is None else anchor_day
+        last = calendar.monthrange(year, month)[1]
+        return date(year, month, min(day, last)).isoformat()
+    if frequency == "yearly":
+        year = d.year + interval
+        month = d.month if anchor_month is None else anchor_month
+        day = d.day if anchor_day is None else anchor_day
+        last = calendar.monthrange(year, month)[1]
+        return date(year, month, min(day, last)).isoformat()
+    raise ValidationError(f"Unknown frequency: {frequency}")
 
 
 def create_person(
@@ -1986,6 +2022,333 @@ def budget_status(
         "alerts": alerts,
         "alert_count": len(alerts),
     }
+
+
+def _recurring_with_relations(conn, recurring_id: int) -> dict[str, Any]:
+    row = conn.execute(
+        "SELECT * FROM recurring_expenses WHERE id = ?", (recurring_id,)
+    ).fetchone()
+    if row is None:
+        raise NotFoundError(f"Recurring expense not found: {recurring_id}")
+    rec = row_to_dict(row)
+    rec["category"] = _get_category_by_ref(conn, rec["category_id"])
+    rec["project"] = _get_project_by_ref(conn, rec["project_id"]) if rec["project_id"] else None
+    rec["paid_by"] = _get_person_by_ref(conn, rec["paid_by_person_id"])
+    alloc_rows = conn.execute(
+        """
+        SELECT ra.person_id, ra.percentage, p.slug AS person_slug, p.display_name AS person_name
+        FROM recurring_allocations ra
+        JOIN persons p ON p.id = ra.person_id
+        WHERE ra.recurring_id = ?
+        ORDER BY ra.person_id
+        """,
+        (recurring_id,),
+    ).fetchall()
+    rec["allocations"] = [
+        {
+            "person_id": r["person_id"],
+            "person_slug": r["person_slug"],
+            "person_name": r["person_name"],
+            "percentage": r["percentage"],
+        }
+        for r in alloc_rows
+    ]
+    return rec
+
+
+def create_recurring_expense(
+    description: str,
+    category: str | int,
+    paid_by: str | int,
+    frequency: str,
+    start_date: str,
+    suggested_amount: float | None = None,
+    currency: str = "ARS",
+    interval: int = 1,
+    anchor_day: int | None = None,
+    anchor_month: int | None = None,
+    project: str | int | None = None,
+    notes: str | None = None,
+    allocations: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    if frequency not in _FREQUENCIES:
+        raise ValidationError(f"frequency must be one of {_FREQUENCIES}")
+    if interval < 1:
+        raise ValidationError("interval must be >= 1")
+    if suggested_amount is not None and suggested_amount < 0:
+        raise ValidationError("suggested_amount must be >= 0")
+    datetime.strptime(start_date, "%Y-%m-%d")
+    start = date.fromisoformat(start_date)
+    resolved_anchor_day = anchor_day if anchor_day is not None else start.day
+    resolved_anchor_month = anchor_month if anchor_month is not None else start.month
+    with connect() as conn:
+        category_row = _get_category_by_ref(conn, category)
+        paid_by_row = _get_person_by_ref(conn, paid_by)
+        project_row = _get_accessible_project_by_ref(conn, project) if project else None
+        caller = _get_caller_person(conn)
+        normalized_allocations = _resolve_allocations(conn, allocations, paid_by_row["id"])
+        cur = conn.execute(
+            """
+            INSERT INTO recurring_expenses (
+                description, suggested_amount, currency, category_id, project_id,
+                paid_by_person_id, notes, frequency, interval, anchor_day, anchor_month,
+                start_date, next_due_date, created_by_person_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                description.strip(),
+                float(suggested_amount) if suggested_amount is not None else None,
+                currency.upper(),
+                category_row["id"],
+                project_row["id"] if project_row else None,
+                paid_by_row["id"],
+                notes,
+                frequency,
+                int(interval),
+                resolved_anchor_day,
+                resolved_anchor_month,
+                start_date,
+                start_date,
+                caller["id"] if caller else None,
+            ),
+        )
+        recurring_id = cur.lastrowid
+        for alloc in normalized_allocations:
+            conn.execute(
+                "INSERT INTO recurring_allocations (recurring_id, person_id, percentage) VALUES (?, ?, ?)",
+                (recurring_id, alloc["person_id"], alloc["percentage"]),
+            )
+        conn.commit()
+        return _recurring_with_relations(conn, recurring_id)
+
+
+def list_recurring_expenses(active_only: bool = False) -> list[dict[str, Any]]:
+    with connect() as conn:
+        clause = "WHERE is_active = 1" if active_only else ""
+        rows = conn.execute(
+            f"SELECT id FROM recurring_expenses {clause} ORDER BY next_due_date, id"
+        ).fetchall()
+        return [_recurring_with_relations(conn, r["id"]) for r in rows]
+
+
+def update_recurring_expense(
+    recurring_id: int,
+    description: str | None = None,
+    suggested_amount: float | None = None,
+    currency: str | None = None,
+    category: str | int | None = None,
+    project: str | int | None = None,
+    paid_by: str | int | None = None,
+    notes: str | None = None,
+    frequency: str | None = None,
+    interval: int | None = None,
+    anchor_day: int | None = None,
+    anchor_month: int | None = None,
+    start_date: str | None = None,
+    is_active: bool | None = None,
+    allocations: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    if frequency is not None and frequency not in _FREQUENCIES:
+        raise ValidationError(f"frequency must be one of {_FREQUENCIES}")
+    if interval is not None and interval < 1:
+        raise ValidationError("interval must be >= 1")
+    if suggested_amount is not None and suggested_amount < 0:
+        raise ValidationError("suggested_amount must be >= 0")
+    if start_date is not None:
+        datetime.strptime(start_date, "%Y-%m-%d")
+    with connect() as conn:
+        current = conn.execute(
+            "SELECT * FROM recurring_expenses WHERE id = ?", (recurring_id,)
+        ).fetchone()
+        if current is None:
+            raise NotFoundError(f"Recurring expense not found: {recurring_id}")
+        category_id = _get_category_by_ref(conn, category)["id"] if category is not None else None
+        project_id = (_get_accessible_project_by_ref(conn, project)["id"] if project else None) if project is not None else current["project_id"]
+        paid_by_id = _get_person_by_ref(conn, paid_by)["id"] if paid_by is not None else None
+
+        conn.execute(
+            """
+            UPDATE recurring_expenses
+            SET description = COALESCE(?, description),
+                suggested_amount = CASE WHEN ? = 1 THEN ? ELSE suggested_amount END,
+                currency = COALESCE(?, currency),
+                category_id = COALESCE(?, category_id),
+                project_id = ?,
+                paid_by_person_id = COALESCE(?, paid_by_person_id),
+                notes = COALESCE(?, notes),
+                frequency = COALESCE(?, frequency),
+                interval = COALESCE(?, interval),
+                anchor_day = COALESCE(?, anchor_day),
+                anchor_month = COALESCE(?, anchor_month),
+                start_date = COALESCE(?, start_date),
+                is_active = COALESCE(?, is_active),
+                updated_at = datetime('now')
+            WHERE id = ?
+            """,
+            (
+                description.strip() if description else None,
+                1 if suggested_amount is not None else 0,
+                float(suggested_amount) if suggested_amount is not None else None,
+                currency.upper() if currency else None,
+                category_id,
+                project_id,
+                paid_by_id,
+                notes,
+                frequency,
+                int(interval) if interval is not None else None,
+                anchor_day,
+                anchor_month,
+                start_date,
+                (1 if is_active else 0) if is_active is not None else None,
+                recurring_id,
+            ),
+        )
+
+        # If cadence/anchor/start changed, recompute next_due_date from start_date.
+        if frequency is not None or interval is not None or start_date is not None or anchor_day is not None or anchor_month is not None:
+            row = conn.execute("SELECT start_date FROM recurring_expenses WHERE id = ?", (recurring_id,)).fetchone()
+            conn.execute(
+                "UPDATE recurring_expenses SET next_due_date = ? WHERE id = ?",
+                (row["start_date"], recurring_id),
+            )
+
+        if allocations is not None:
+            row = conn.execute("SELECT paid_by_person_id FROM recurring_expenses WHERE id = ?", (recurring_id,)).fetchone()
+            normalized = _resolve_allocations(conn, allocations, row["paid_by_person_id"])
+            conn.execute("DELETE FROM recurring_allocations WHERE recurring_id = ?", (recurring_id,))
+            for alloc in normalized:
+                conn.execute(
+                    "INSERT INTO recurring_allocations (recurring_id, person_id, percentage) VALUES (?, ?, ?)",
+                    (recurring_id, alloc["person_id"], alloc["percentage"]),
+                )
+        conn.commit()
+        return _recurring_with_relations(conn, recurring_id)
+
+
+def list_due_recurring(today: str | None = None) -> list[dict[str, Any]]:
+    if today is None:
+        today = _today_str()
+    datetime.strptime(today, "%Y-%m-%d")
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT id FROM recurring_expenses WHERE is_active = 1 AND next_due_date <= ? ORDER BY next_due_date, id",
+            (today,),
+        ).fetchall()
+        return [_recurring_with_relations(conn, r["id"]) for r in rows]
+
+
+def generate_recurring_expense(
+    recurring_id: int,
+    amount: float | None = None,
+    expense_date: str | None = None,
+) -> dict[str, Any]:
+    with connect() as conn:
+        rec = conn.execute(
+            "SELECT * FROM recurring_expenses WHERE id = ?", (recurring_id,)
+        ).fetchone()
+        if rec is None:
+            raise NotFoundError(f"Recurring expense not found: {recurring_id}")
+        if not rec["is_active"]:
+            raise ValidationError("Recurring template is inactive")
+
+        occurrence_date = expense_date or rec["next_due_date"]
+        datetime.strptime(occurrence_date, "%Y-%m-%d")
+
+        # Idempotency: never create two expenses for the same template+date.
+        existing = conn.execute(
+            "SELECT 1 FROM expenses WHERE recurring_id = ? AND expense_date = ?",
+            (recurring_id, occurrence_date),
+        ).fetchone()
+        if existing is not None:
+            raise ValidationError(
+                f"An expense for this recurring template already exists on {occurrence_date}"
+            )
+
+        if amount is None:
+            if rec["suggested_amount"] is None:
+                raise ValidationError("amount is required for a variable recurring expense")
+            final_amount = float(rec["suggested_amount"])
+        else:
+            if amount < 0:
+                raise ValidationError("Amount must be >= 0")
+            final_amount = float(amount)
+
+        try:
+            cur = conn.execute(
+                """
+                INSERT INTO expenses (
+                    expense_date, description, amount, currency, category_id,
+                    project_id, paid_by_person_id, notes, recurring_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    occurrence_date,
+                    rec["description"],
+                    final_amount,
+                    rec["currency"],
+                    rec["category_id"],
+                    rec["project_id"],
+                    rec["paid_by_person_id"],
+                    rec["notes"],
+                    recurring_id,
+                ),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise ValidationError(
+                f"An expense for this recurring template already exists on {occurrence_date}"
+            ) from exc
+        expense_id = cur.lastrowid
+        alloc_rows = conn.execute(
+            "SELECT person_id, percentage FROM recurring_allocations WHERE recurring_id = ?",
+            (recurring_id,),
+        ).fetchall()
+        for a in alloc_rows:
+            conn.execute(
+                "INSERT INTO expense_allocations (expense_id, person_id, percentage) VALUES (?, ?, ?)",
+                (expense_id, a["person_id"], a["percentage"]),
+            )
+
+        # Always record that an occurrence was generated for this date.
+        conn.execute(
+            "UPDATE recurring_expenses SET last_generated_date = ?, updated_at = datetime('now') WHERE id = ?",
+            (occurrence_date, recurring_id),
+        )
+        # Advance the schedule only when generating the current (not a backfilled past) occurrence.
+        if occurrence_date >= rec["next_due_date"]:
+            new_due = _advance_due_date(
+                rec["next_due_date"], rec["frequency"], rec["interval"],
+                rec["anchor_day"], rec["anchor_month"],
+            )
+            conn.execute(
+                "UPDATE recurring_expenses SET next_due_date = ? WHERE id = ?",
+                (new_due, recurring_id),
+            )
+        conn.commit()
+        return {
+            "expense": _expense_with_relations(conn, expense_id),
+            "recurring": _recurring_with_relations(conn, recurring_id),
+        }
+
+
+def delete_recurring_expense(recurring_id: int) -> dict[str, Any]:
+    with connect() as conn:
+        row = conn.execute("SELECT id FROM recurring_expenses WHERE id = ?", (recurring_id,)).fetchone()
+        if row is None:
+            raise NotFoundError(f"Recurring expense not found: {recurring_id}")
+        referenced = conn.execute(
+            "SELECT COUNT(*) AS c FROM expenses WHERE recurring_id = ?", (recurring_id,)
+        ).fetchone()["c"]
+        if referenced:
+            conn.execute(
+                "UPDATE recurring_expenses SET is_active = 0, updated_at = datetime('now') WHERE id = ?",
+                (recurring_id,),
+            )
+            conn.commit()
+            return {"hard_deleted": False, "deactivated": True, "id": recurring_id}
+        conn.execute("DELETE FROM recurring_allocations WHERE recurring_id = ?", (recurring_id,))
+        conn.execute("DELETE FROM recurring_expenses WHERE id = ?", (recurring_id,))
+        conn.commit()
+        return {"hard_deleted": True, "deactivated": False, "id": recurring_id}
 
 
 def health_check() -> dict[str, Any]:

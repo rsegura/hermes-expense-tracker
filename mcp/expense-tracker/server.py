@@ -749,6 +749,105 @@ def budget_status(year: int, month: int, alerts_only: bool = False) -> str:
 
 
 @mcp.tool()
+def create_recurring_expense(
+    description: str,
+    category: str,
+    paid_by: str,
+    frequency: str,
+    start_date: str,
+    suggested_amount: float | None = None,
+    currency: str = "ARS",
+    interval: int = 1,
+    anchor_day: int | None = None,
+    anchor_month: int | None = None,
+    project: str | None = None,
+    notes: str | None = None,
+    allocations: list[dict[str, Any]] | None = None,
+) -> str:
+    """Create a recurring expense template (weekly/monthly/yearly). suggested_amount=null means variable."""
+    try:
+        return _ok(repo.create_recurring_expense(
+            description=description, category=category, paid_by=paid_by,
+            frequency=frequency, start_date=start_date, suggested_amount=suggested_amount,
+            currency=currency, interval=interval, anchor_day=anchor_day,
+            anchor_month=anchor_month, project=project, notes=notes, allocations=allocations,
+        ))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+def update_recurring_expense(
+    recurring_id: int,
+    description: str | None = None,
+    suggested_amount: float | None = None,
+    currency: str | None = None,
+    category: str | None = None,
+    project: str | None = None,
+    paid_by: str | None = None,
+    notes: str | None = None,
+    frequency: str | None = None,
+    interval: int | None = None,
+    anchor_day: int | None = None,
+    anchor_month: int | None = None,
+    start_date: str | None = None,
+    is_active: bool | None = None,
+    allocations: list[dict[str, Any]] | None = None,
+) -> str:
+    """Update a recurring expense template. Changing cadence/start resets next_due_date."""
+    try:
+        return _ok(repo.update_recurring_expense(
+            recurring_id, description=description, suggested_amount=suggested_amount,
+            currency=currency, category=category, project=project, paid_by=paid_by,
+            notes=notes, frequency=frequency, interval=interval, anchor_day=anchor_day,
+            anchor_month=anchor_month, start_date=start_date, is_active=is_active,
+            allocations=allocations,
+        ))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+def delete_recurring_expense(recurring_id: int) -> str:
+    """Delete a recurring template (deactivates if it has generated expenses, else hard-deletes)."""
+    try:
+        return _ok(repo.delete_recurring_expense(recurring_id))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+def list_recurring_expenses(active_only: bool = False) -> str:
+    """List recurring expense templates for the household."""
+    try:
+        return _ok(repo.list_recurring_expenses(active_only=active_only))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+def list_due_recurring(today: str | None = None) -> str:
+    """List recurring templates whose next occurrence is due (next_due_date <= today)."""
+    try:
+        return _ok(repo.list_due_recurring(today=today))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+def generate_recurring_expense(
+    recurring_id: int,
+    amount: float | None = None,
+    expense_date: str | None = None,
+) -> str:
+    """Materialize one occurrence of a recurring template into a real expense (advances the schedule)."""
+    try:
+        return _ok(repo.generate_recurring_expense(recurring_id, amount=amount, expense_date=expense_date))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
 def health_check() -> str:
     """Verify DB connectivity and return counts."""
     try:

@@ -134,6 +134,31 @@ class E2EValidation(unittest.TestCase):
         self.assertEqual(result["status"], "ok")
         self.assertGreaterEqual(result["counts"]["categories"], 1)
 
+    def test_recurring_catch_up_walks_backlog(self) -> None:
+        from expense_tracker import repositories as repo
+        rec = repo.create_recurring_expense(
+            description="Alquiler",
+            category="comida",
+            paid_by="alice",
+            frequency="monthly",
+            start_date="2026-01-05",
+            suggested_amount=100000,
+        )
+        rid = rec["id"]
+        generated_dates = []
+        # Materialize every occurrence due on/before 2026-03-15
+        for _ in range(12):  # safety bound
+            due = repo.list_due_recurring(today="2026-03-15")
+            if not due:
+                break
+            occ = due[0]["next_due_date"]
+            repo.generate_recurring_expense(rid, expense_date=occ)
+            generated_dates.append(occ)
+        self.assertEqual(generated_dates, ["2026-01-05", "2026-02-05", "2026-03-05"])
+        # Next due is now in the future relative to 2026-03-15
+        remaining = repo.list_due_recurring(today="2026-03-15")
+        self.assertEqual(remaining, [])
+
 
 if __name__ == "__main__":
     unittest.main()

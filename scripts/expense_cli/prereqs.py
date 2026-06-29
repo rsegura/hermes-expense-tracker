@@ -8,6 +8,8 @@ import sys
 
 from .runtime import HERMES_MIN, find_system_python, hermes_executable, run_hermes
 
+RECEIPT_NOTE = "Receipt photo capture requires a vision-capable (multimodal) model in the profile."
+
 
 def check_python3() -> bool:
     py = find_system_python()
@@ -61,6 +63,8 @@ def require_prerequisites(*, need_hermes: bool = True) -> bool:
     ok = check_python3()
     if need_hermes:
         ok = check_hermes() and ok
+    print()
+    print(f"ℹ {RECEIPT_NOTE}")
     print()
     if not ok:
         print("Install aborted. Fix prerequisites and try again.", file=sys.stderr)

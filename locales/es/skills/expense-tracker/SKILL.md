@@ -141,3 +141,23 @@ Listo ✅
 
 ¿Algo más?
 ```
+
+## Gastos recurrentes
+
+Plantillas para gastos que se repiten (alquiler, suscripciones, facturas). Son **del hogar** — todos las ven y cualquiera puede materializar lo que vence. Nada se crea automáticamente; las ocurrencias se generan bajo demanda.
+
+- `mcp_expense_tracker_create_recurring_expense` — define una plantilla: `description`, `category`, `paid_by`, `frequency` (`weekly`|`monthly`|`yearly`), `start_date` (AAAA-MM-DD). Opcional: `suggested_amount` (omítelo/null para facturas **variables** como la luz), `interval` (cada N), `anchor_day`, `anchor_month`, `project`, `notes`, `allocations`.
+- `mcp_expense_tracker_list_recurring_expenses` — muestra todas las plantillas y su próxima fecha de vencimiento.
+- `mcp_expense_tracker_list_due_recurring` — muestra las plantillas vencidas (`next_due_date <= hoy`).
+- `mcp_expense_tracker_generate_recurring_expense` — crea un gasto real a partir de una plantilla. En plantillas **fijas** se usa el importe sugerido; en **variables** DEBES pasar `amount`. Avanza el calendario un periodo.
+- `mcp_expense_tracker_update_recurring_expense` / `mcp_expense_tracker_delete_recurring_expense`.
+
+**Cuando un miembro pregunte "¿qué toca pagar este mes?" o inicie una sesión:** llama a `list_due_recurring`. Para cada plantilla vencida: si es fija, confirma y genera; si es variable, pregunta el importe y luego genera. Si hay varios periodos atrasados, materialízalos de uno en uno (cada generación avanza un periodo).
+
+## Recibos (fotos)
+
+Cuando un miembro envíe una **foto de un recibo**, léela directamente (tu modelo es multimodal) y extrae:
+- **importe** (total), **fecha**, **comercio** → úsalo como `description`, e infiere la **categoría** de las categorías existentes del hogar (`list_categories`).
+- Pon `paid_by` por defecto en quien envió la foto.
+
+Muestra una confirmación breve — Importe / Fecha / Comercio / Categoría — y solo tras la confirmación llama a `mcp_expense_tracker_add_expense`. Si un campo no se lee, pregunta **solo** por ese campo. La imagen no se guarda; solo se registra el gasto resultante.

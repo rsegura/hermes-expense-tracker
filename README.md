@@ -53,7 +53,7 @@ The wizard asks for language, sets up the expense server + database, and creates
 | Step | Command | Expected |
 |------|---------|----------|
 | 1. Model + API key | `hermes -p alice setup` | Provider configured |
-| 2. Verify MCP | `hermes -p expense-alice mcp test expense-tracker` | 38 tools, ✓ Connected |
+| 2. Verify MCP | `hermes -p expense-alice mcp test expense-tracker` | 44 tools, ✓ Connected |
 | 3. Telegram bot | Create bot in [@BotFather](https://t.me/BotFather), then `alice gateway setup && alice gateway start` | Gateway running |
 | 4. Pairing | Message your bot → copy code → `hermes -p alice pairing approve telegram <CODE>` | Bot replies in chat |
 | 5. First expense | `alice chat` | *"Log $50 at the pharmacy, I paid"* |
@@ -210,6 +210,25 @@ Everything below is done **by chatting** with your bot (or CLI). You never touch
 | *"Which budgets am I about to break?"* | `budget_status` |
 | *"List all budgets"* | `list_category_budgets` |
 
+### Recurring expenses
+
+| You say | MCP does |
+|---------|----------|
+| *"Create a monthly $200 rent expense"* | `create_recurring_expense` |
+| *"Show all my recurring expenses"* | `list_recurring_expenses` |
+| *"Which recurring expenses are due today?"* | `list_due_recurring` |
+| *"Log this month's rent"* | `generate_recurring_expense` — creates the real expense and advances the schedule |
+| *"Change rent amount to $220"* | `update_recurring_expense` |
+| *"Remove the streaming subscription"* | `delete_recurring_expense` |
+
+Templates use a `weekly` / `monthly` / `yearly` cadence. Set `suggested_amount: null` for variable amounts (e.g., utilities). Generation is on-demand — no background scheduler runs.
+
+### Receipts (photos)
+
+Send a photo of a receipt in chat and the assistant reads the amount, date, merchant, and category, then logs the expense after you confirm. The receipt image itself is **not stored** — only the resulting expense record is saved to the database.
+
+**Requirement:** the profile's model must be vision-capable (multimodal). If the model cannot process images, receipt capture will not work. Check `hermes -p expense-<slug> config` to confirm which model is in use.
+
 ### Household setup (conversational)
 
 | You say | MCP does |
@@ -322,7 +341,7 @@ hermes -p alice chat           # shortcut alias
 | Step | Command | Notes |
 |------|---------|-------|
 | 1 | `hermes -p alice setup` | Model + API key |
-| 2 | `hermes -p expense-alice mcp test expense-tracker` | Must show 38 tools |
+| 2 | `hermes -p expense-alice mcp test expense-tracker` | Must show 44 tools |
 | 3 | [@BotFather](https://t.me/BotFather) → new bot → `alice gateway setup` | Paste bot token |
 | 4 | `alice gateway start` | Keep gateway running |
 | 5 | Message bot in Telegram → `hermes -p alice pairing approve telegram <CODE>` | Code appears when you first message the bot |
@@ -378,7 +397,7 @@ If someone participates in expenses but does not chat:
 
 ## MCP tools reference
 
-**38 tools.** Hermes exposes them as `mcp_expense_tracker_<tool>`.
+**44 tools.** Hermes exposes them as `mcp_expense_tracker_<tool>`.
 
 ### Persons
 
@@ -448,6 +467,19 @@ All report tools accept filters: `category`, `project`, `paid_by`, `allocated_to
 | `export_expenses_file` | Writes CSV/JSON to disk, returns path |
 | `generate_report` | Markdown report with optional ASCII charts (locale-aware) |
 | `render_chart` | PNG chart via matplotlib — `by_category`, `by_project`, `monthly_trend`, `top_expenses` |
+
+### Recurring expenses
+
+| Tool | Description |
+|------|-------------|
+| `create_recurring_expense` | Define a recurring template (`weekly` / `monthly` / `yearly`); `suggested_amount: null` = variable amount |
+| `update_recurring_expense` | Edit a template; changing cadence or start date resets the next due date |
+| `delete_recurring_expense` | Deactivates if it has generated expenses; hard-deletes otherwise |
+| `list_recurring_expenses` | All household templates with their next due date |
+| `list_due_recurring` | Templates whose `next_due_date` is on or before today |
+| `generate_recurring_expense` | Materialize one occurrence into a real expense and advance the schedule |
+
+Generation is lazy and on-demand — no background scheduler. Each call to `generate_recurring_expense` creates one real expense and moves the template's `next_due_date` forward by one period.
 
 ### Budgets
 
@@ -527,7 +559,7 @@ hermes-expense-tracker/
 ├── shared/seed-categories-en.sql
 ├── shared/seed-categories-es.sql
 ├── mcp/expense-tracker/
-│   ├── server.py             # 38 FastMCP tool definitions
+│   ├── server.py             # 44 FastMCP tool definitions
 │   ├── manifest.yaml
 │   └── expense_tracker/
 │       ├── repositories.py   # business logic + DB access

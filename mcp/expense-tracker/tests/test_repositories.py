@@ -348,5 +348,235 @@ class ProjectMembershipTests(unittest.TestCase):
             repo.create_project("No caller")
 
 
+class RecurringDateMathTests(unittest.TestCase):
+    def test_weekly_advance(self) -> None:
+        self.assertEqual(
+            repo._advance_due_date("2026-06-01", "weekly", 2, None, None),
+            "2026-06-15",
+        )
+
+    def test_monthly_advance_clamps_end_of_month(self) -> None:
+        # Jan 31 + 1 month -> Feb 28 (2026 is not a leap year)
+        self.assertEqual(
+            repo._advance_due_date("2026-01-31", "monthly", 1, 31, None),
+            "2026-02-28",
+        )
+
+    def test_monthly_advance_preserves_anchor_after_clamp(self) -> None:
+        # From the clamped Feb 28, next month should return to day 31 (March)
+        self.assertEqual(
+            repo._advance_due_date("2026-02-28", "monthly", 1, 31, None),
+            "2026-03-31",
+        )
+
+    def test_yearly_advance_honors_anchor_month_and_day(self) -> None:
+        # Feb 29 (leap) + 1 year -> Feb 28 (2025 not a leap year), anchor day clamped
+        self.assertEqual(
+            repo._advance_due_date("2024-02-29", "yearly", 1, 29, 2),
+            "2025-02-28",
+        )
+
+    def test_unknown_frequency_raises(self) -> None:
+        with self.assertRaises(repo.ValidationError):
+            repo._advance_due_date("2026-01-01", "daily", 1, None, None)
+
+    def test_monthly_advance_multi_interval_clamps(self) -> None:
+        # Jan 31 + 3 months -> April 30 (April has 30 days), anchor day 31 preserved
+        self.assertEqual(
+            repo._advance_due_date("2026-01-31", "monthly", 3, 31, None),
+            "2026-04-30",
+        )
+
+
+class RecurringRepoTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db_path = Path(self.tmp.name) / "test.db"
+        os.environ["EXPENSE_DB_PATH"] = str(self.db_path)
+        init_db(seed="test")
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _make_rent(self, **overrides):
+        params = dict(
+            description="Alquiler",
+            category="comida",
+            paid_by="alice",
+            frequency="monthly",
+            start_date="2026-01-05",
+            suggested_amount=100000,
+        )
+        params.update(overrides)
+        return repo.create_recurring_expense(**params)
+
+    def test_create_sets_next_due_to_start_and_default_allocation(self) -> None:
+        rec = self._make_rent()
+        self.assertEqual(rec["next_due_date"], "2026-01-05")
+        self.assertEqual(rec["frequency"], "monthly")
+        self.assertEqual(rec["interval"], 1)
+        self.assertEqual(rec["anchor_day"], 5)
+        self.assertEqual(rec["anchor_month"], 1)  # start_date is 2026-01-05
+        self.assertEqual(len(rec["allocations"]), 1)
+        self.assertEqual(rec["allocations"][0]["person_slug"], "alice")
+        self.assertAlmostEqual(rec["allocations"][0]["percentage"], 100.0)
+
+    def test_create_with_split_allocations(self) -> None:
+        rec = self._make_rent(
+            allocations=[
+                {"person": "alice", "percentage": 60},
+                {"person": "bob", "percentage": 40},
+            ],
+        )
+        self.assertEqual(len(rec["allocations"]), 2)
+
+    def test_create_rejects_bad_frequency(self) -> None:
+        with self.assertRaises(repo.ValidationError):
+            self._make_rent(frequency="daily")
+
+    def test_list_returns_created_templates(self) -> None:
+        self._make_rent()
+        self._make_rent(description="Netflix", suggested_amount=5000)
+        items = repo.list_recurring_expenses()
+        self.assertEqual(len(items), 2)
+        for it in items:
+            self.assertIn("next_due_date", it)
+            self.assertIsInstance(it["allocations"], list)
+            self.assertGreater(len(it["allocations"]), 0)
+        # Both have the same start_date, so ordering falls back to id (insertion order)
+        self.assertEqual(items[0]["description"], "Alquiler")
+        self.assertEqual(items[1]["description"], "Netflix")
+
+    def test_update_changes_fields_and_recomputes_due_on_cadence_change(self) -> None:
+        rec = self._make_rent()
+        updated = repo.update_recurring_expense(
+            rec["id"], suggested_amount=120000, frequency="yearly", anchor_month=1, anchor_day=5
+        )
+        self.assertEqual(updated["suggested_amount"], 120000)
+        self.assertEqual(updated["frequency"], "yearly")
+        # next_due_date recomputed from start_date with new cadence anchor
+        self.assertEqual(updated["next_due_date"], "2026-01-05")
+
+    def test_update_replaces_allocations(self) -> None:
+        rec = self._make_rent()
+        updated = repo.update_recurring_expense(
+            rec["id"],
+            allocations=[
+                {"person": "alice", "percentage": 30},
+                {"person": "bob", "percentage": 70},
+            ],
+        )
+        self.assertEqual(len(updated["allocations"]), 2)
+
+    def test_delete_deactivates_when_referenced(self) -> None:
+        from expense_tracker.db import connect
+        rec = self._make_rent()
+        # Simulate a generated expense referencing this template (via raw SQL).
+        with connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO expenses
+                    (expense_date, description, amount, currency, category_id, paid_by_person_id, recurring_id)
+                SELECT '2026-01-05', 'Alquiler', 100000, 'ARS', category_id, paid_by_person_id, id
+                FROM recurring_expenses WHERE id = ?
+                """,
+                (rec["id"],),
+            )
+            conn.commit()
+        result = repo.delete_recurring_expense(rec["id"])
+        self.assertFalse(result["hard_deleted"])
+        items = repo.list_recurring_expenses()
+        self.assertEqual(items[0]["is_active"], 0)
+
+    def test_delete_hard_when_unreferenced(self) -> None:
+        rec = self._make_rent()
+        result = repo.delete_recurring_expense(rec["id"])
+        self.assertTrue(result["hard_deleted"])
+        self.assertEqual(repo.list_recurring_expenses(), [])
+
+    def test_update_nonexistent_raises(self) -> None:
+        with self.assertRaises(repo.NotFoundError):
+            repo.update_recurring_expense(99999, description="Ghost")
+
+    def test_delete_nonexistent_raises(self) -> None:
+        with self.assertRaises(repo.NotFoundError):
+            repo.delete_recurring_expense(99999)
+
+    def test_list_due_returns_only_active_and_due(self) -> None:
+        # Due: start in the past
+        self._make_rent(start_date="2020-01-05")
+        # Not due: start in the far future
+        self._make_rent(description="Future", start_date="2999-01-05")
+        due = repo.list_due_recurring(today="2026-06-15")
+        self.assertEqual(len(due), 1)
+        self.assertEqual(due[0]["description"], "Alquiler")
+
+    def test_list_due_excludes_inactive(self) -> None:
+        rec = self._make_rent(start_date="2020-01-05")
+        repo.update_recurring_expense(rec["id"], is_active=False)
+        self.assertEqual(repo.list_due_recurring(today="2026-06-15"), [])
+
+    def test_generate_fixed_uses_suggested_amount_and_advances_due(self) -> None:
+        rec = self._make_rent(start_date="2026-01-05", suggested_amount=100000)
+        result = repo.generate_recurring_expense(rec["id"])
+        self.assertEqual(result["expense"]["amount"], 100000)
+        self.assertEqual(result["expense"]["expense_date"], "2026-01-05")
+        self.assertEqual(result["expense"]["recurring_id"], rec["id"])
+        # next_due advanced one month
+        self.assertEqual(result["recurring"]["next_due_date"], "2026-02-05")
+        self.assertEqual(result["recurring"]["last_generated_date"], "2026-01-05")
+
+    def test_generate_variable_requires_amount(self) -> None:
+        rec = self._make_rent(suggested_amount=None)
+        with self.assertRaises(repo.ValidationError):
+            repo.generate_recurring_expense(rec["id"])
+        result = repo.generate_recurring_expense(rec["id"], amount=54321)
+        self.assertEqual(result["expense"]["amount"], 54321)
+
+    def test_generate_is_idempotent_for_same_period(self) -> None:
+        rec = self._make_rent(start_date="2026-01-05", suggested_amount=100000)
+        repo.generate_recurring_expense(rec["id"], expense_date="2026-01-05")
+        with self.assertRaises(repo.ValidationError):
+            repo.generate_recurring_expense(rec["id"], expense_date="2026-01-05")
+
+    def test_generate_copies_allocations(self) -> None:
+        rec = self._make_rent(
+            allocations=[
+                {"person": "alice", "percentage": 60},
+                {"person": "bob", "percentage": 40},
+            ],
+        )
+        result = repo.generate_recurring_expense(rec["id"])
+        self.assertEqual(len(result["expense"]["allocations"]), 2)
+
+    def test_generate_backfill_past_date_records_generation_without_advancing(self) -> None:
+        rec = self._make_rent(start_date="2026-03-05", suggested_amount=100000)
+        repo.generate_recurring_expense(rec["id"])  # generates March, advances to April
+        result = repo.generate_recurring_expense(rec["id"], expense_date="2026-02-05")
+        self.assertEqual(result["expense"]["expense_date"], "2026-02-05")
+        # schedule NOT advanced by the backfill
+        self.assertEqual(result["recurring"]["next_due_date"], "2026-04-05")
+        # but the generation is still recorded
+        self.assertEqual(result["recurring"]["last_generated_date"], "2026-02-05")
+
+    def test_duplicate_recurring_period_blocked_at_db_level(self) -> None:
+        import sqlite3
+        from expense_tracker.db import connect
+        rec = self._make_rent(start_date="2026-01-05", suggested_amount=100000)
+        repo.generate_recurring_expense(rec["id"], expense_date="2026-01-05")
+        with self.assertRaises(sqlite3.IntegrityError):
+            with connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO expenses
+                        (expense_date, description, amount, currency, category_id, paid_by_person_id, recurring_id)
+                    SELECT '2026-01-05', 'dup', 1, 'ARS', category_id, paid_by_person_id, id
+                    FROM recurring_expenses WHERE id = ?
+                    """,
+                    (rec["id"],),
+                )
+                conn.commit()
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -81,4 +81,64 @@ def run_migrations() -> None:
             )
 
         _backfill_project_members(conn)
+
+        if not _table_exists(conn, "recurring_expenses"):
+            conn.execute(
+                """
+                CREATE TABLE recurring_expenses (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    description TEXT NOT NULL,
+                    suggested_amount REAL CHECK (suggested_amount IS NULL OR suggested_amount >= 0),
+                    currency TEXT NOT NULL DEFAULT 'ARS',
+                    category_id INTEGER NOT NULL REFERENCES categories(id),
+                    project_id INTEGER REFERENCES projects(id),
+                    paid_by_person_id INTEGER NOT NULL REFERENCES persons(id),
+                    notes TEXT,
+                    frequency TEXT NOT NULL CHECK (frequency IN ('weekly', 'monthly', 'yearly')),
+                    interval INTEGER NOT NULL DEFAULT 1 CHECK (interval >= 1),
+                    anchor_day INTEGER,
+                    anchor_month INTEGER,
+                    start_date TEXT NOT NULL,
+                    next_due_date TEXT NOT NULL,
+                    last_generated_date TEXT,
+                    is_active INTEGER NOT NULL DEFAULT 1,
+                    created_by_person_id INTEGER REFERENCES persons(id),
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                )
+                """,
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_recurring_due ON recurring_expenses(next_due_date)",
+            )
+
+        if not _table_exists(conn, "recurring_allocations"):
+            conn.execute(
+                """
+                CREATE TABLE recurring_allocations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    recurring_id INTEGER NOT NULL REFERENCES recurring_expenses(id) ON DELETE CASCADE,
+                    person_id INTEGER NOT NULL REFERENCES persons(id),
+                    percentage REAL NOT NULL CHECK (percentage > 0 AND percentage <= 100),
+                    UNIQUE (recurring_id, person_id)
+                )
+                """,
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_recurring_alloc_recurring ON recurring_allocations(recurring_id)",
+            )
+
+        if not _column_exists(conn, "expenses", "recurring_id"):
+            conn.execute(
+                "ALTER TABLE expenses ADD COLUMN recurring_id INTEGER REFERENCES recurring_expenses(id)",
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_expenses_recurring ON expenses(recurring_id)",
+            )
+
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_expenses_recurring_period "
+            "ON expenses(recurring_id, expense_date) WHERE recurring_id IS NOT NULL"
+        )
+
         conn.commit()

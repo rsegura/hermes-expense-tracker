@@ -84,7 +84,7 @@ Projects have **per-person membership** (`project_members`). Each MCP profile re
 
 ---
 
-## MCP — 38 tools
+## MCP — 44 tools
 
 Prefix: `mcp_expense_tracker_<tool>`
 
@@ -103,6 +103,14 @@ Comparison: `compare_months`, `compare_periods`. Top expenses: `top_expenses`. E
 Monthly category budgets: `set_category_budget`, `budget_status` (alerts when over threshold).
 
 `add_expense`: allocations by slug; if none → 100% to payer.
+
+### Recurring expenses (6 new tools)
+
+Templates stored in `recurring_expenses` + `recurring_allocations` tables. Cadence: `weekly` / `monthly` / `yearly`. Generation is **lazy and on-demand** — no background scheduler. Each `generate_recurring_expense` call creates one real expense row and advances `next_due_date` by one period. `list_due_recurring` returns templates where `next_due_date <= today`. Deleting a template deactivates it if it has generated expenses; otherwise hard-deletes.
+
+### Receipt capture
+
+The agent's multimodal model reads receipt photos directly in chat (amount, date, merchant, category) and calls `add_expense` after user confirmation. **No backend storage** — the image is never written to disk or the database; only the resulting expense record is persisted. Requires a vision-capable (multimodal) model in the profile.
 
 ---
 

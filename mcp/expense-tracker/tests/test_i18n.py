@@ -34,6 +34,24 @@ class I18nTests(unittest.TestCase):
         os.environ["EXPENSE_LOCALE"] = "en"
         self.assertEqual(i18n.t("by_category"), "By category")
 
+    def test_frequency_label_monthly_en(self) -> None:
+        self.assertEqual(i18n.frequency_label("monthly", "en"), "monthly")
+
+    def test_frequency_label_monthly_es(self) -> None:
+        self.assertEqual(i18n.frequency_label("monthly", "es"), "mensual")
+
+    def test_frequency_label_weekly_es(self) -> None:
+        self.assertEqual(i18n.frequency_label("weekly", "es"), "semanal")
+
+    def test_frequency_label_yearly_es(self) -> None:
+        self.assertEqual(i18n.frequency_label("yearly", "es"), "anual")
+
+    def test_frequency_label_unknown_frequency_returns_key(self) -> None:
+        self.assertEqual(i18n.frequency_label("biweekly", "en"), "biweekly")
+
+    def test_frequency_label_invalid_locale_falls_back_en(self) -> None:
+        self.assertEqual(i18n.frequency_label("monthly", "fr"), "monthly")
+
 
 if __name__ == "__main__":
     unittest.main()
